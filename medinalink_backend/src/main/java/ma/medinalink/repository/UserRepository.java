@@ -101,6 +101,15 @@ public void updateRole(UUID id, ma.medinalink.entity.Role newRole) {
         ).getResultList();
     }
 
+    @Transactional
+    public void updatePassword(UUID id, String newPasswordHash) {
+        User user = em.find(User.class, id);
+        if (user != null) {
+            user.setPasswordHash(newPasswordHash);
+            em.merge(user);
+        }
+    }
+
     // -------------------------------------------------------
     // Vérifier si un email est déjà utilisé
     // -------------------------------------------------------

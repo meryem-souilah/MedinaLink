@@ -20,12 +20,14 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.BadRequestException;
 import jakarta.ws.rs.NotAuthorizedException;
+import jakarta.ws.rs.NotFoundException;
 import ma.medinalink.dto.AuthResponse;
 import ma.medinalink.dto.LoginRequest;
 import ma.medinalink.dto.RegisterRequest;
 import ma.medinalink.entity.User;
 import ma.medinalink.repository.UserRepository;
 import org.mindrot.jbcrypt.BCrypt;
+import java.util.UUID;
 
 @ApplicationScoped
 public class AuthService {
@@ -133,5 +135,24 @@ public class AuthService {
             user.getFullName(),
             user.getRole().name()
         );
+    }
+
+    // -------------------------------------------------------
+    // Changer le mot de passe d'un utilisateur connecté
+    // -------------------------------------------------------
+    public void changePassword(UUID userId, String oldPassword, String newPassword) {
+        User user = userRepository.findById(userId)
+            .orElseThrow(() -> new NotFoundException("Utilisateur non trouvé"));
+
+        if (!BCrypt.checkpw(oldPassword, user.getPasswordHash())) {
+            throw new BadRequestException("Mot de passe actuel incorrect");
+        }
+
+        if (newPassword == null || newPassword.length() < 6) {
+            throw new BadRequestException("Le nouveau mot de passe doit faire au moins 6 caractères");
+        }
+
+        String newHash = BCrypt.hashpw(newPassword, BCrypt.gensalt(10));
+        userRepository.updatePassword(userId, newHash);
     }
 }
