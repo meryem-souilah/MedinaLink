@@ -48,22 +48,36 @@ export default function CreateReport() {
       return (parts.slice(-2).join(', ') || raw.trim()) + ', Maroc';
     };
 
-    const nominatim = async (q) => {
-      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1&addressdetails=1`;
-      const res = await fetch(url, { headers: { 'Accept-Language': 'fr' } });
+    // Bounding box Maroc pour améliorer la précision Nominatim
+    const MAROC_BBOX = 'viewbox=-13.2,35.9,-0.9,21.3&bounded=1';
+
+    const nominatim = async (q, bounded = true) => {
+      const bbox = bounded ? `&${MAROC_BBOX}` : '';
+      const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}&limit=1&addressdetails=1${bbox}&countrycodes=ma`;
+      const res = await fetch(url, { headers: { 'Accept-Language': 'fr', 'User-Agent': 'MedinaLink/1.0' } });
       const data = await res.json();
       return data && data.length > 0 ? data[0] : null;
     };
 
+    // Extrait uniquement le nom de ville depuis l'adresse
+    const cityOnly = (raw) => {
+      const parts = raw.split(/[,\-]+/).map(p => p.trim()).filter(p => p.length > 2);
+      const city = parts.find(p => /^[a-zA-ZÀ-ÿ\s-]{3,}$/.test(p) && !/^\d+/.test(p));
+      return (city || parts[0] || raw) + ', Maroc';
+    };
+
     geocodeTimer.current = setTimeout(async () => {
       setGeocoding(true);
-      setGeocodeMsg('');
+      setGeocodeMsg('Recherche en cours…');
       try {
-        // Tentative 1 : adresse nettoyée
-        let result = await nominatim(cleanQuery(address));
+        // Tentative 1 : adresse nettoyée + bounding box Maroc
+        let result = await nominatim(cleanQuery(address), true);
 
         // Tentative 2 : version simplifiée (quartier + ville)
-        if (!result) result = await nominatim(simplifyQuery(address));
+        if (!result) result = await nominatim(simplifyQuery(address), true);
+
+        // Tentative 3 : uniquement ville + Maroc, sans bounded
+        if (!result) result = await nominatim(cityOnly(address), false);
 
         if (result) {
           const lat = parseFloat(result.lat).toFixed(6);
@@ -71,12 +85,12 @@ export default function CreateReport() {
           setLatitude(lat);
           setLongitude(lon);
           const shortName = result.display_name.split(',').slice(0, 3).join(', ');
-          setGeocodeMsg(`✅ Trouvé : ${shortName}`);
+          setGeocodeMsg(`✅ ${shortName}`);
         } else {
-          setGeocodeMsg('⚠️ Adresse introuvable — entrez les coordonnées manuellement ou utilisez "Ma position"');
+          setGeocodeMsg('⚠️ Adresse introuvable — vérifiez l\'orthographe ou utilisez "Ma position"');
         }
       } catch {
-        setGeocodeMsg('');
+        setGeocodeMsg('⚠️ Service de géocodage indisponible — entrez les coordonnées manuellement');
       } finally {
         setGeocoding(false);
       }

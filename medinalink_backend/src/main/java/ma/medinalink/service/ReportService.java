@@ -92,7 +92,45 @@ public class ReportService {
         }
 
         Report saved = reportRepository.save(report);
+        assignNearestAgent(saved);
         return toResponse(saved);
+    }
+
+    private void assignNearestAgent(Report report) {
+        try {
+            List<User> agents = userRepository.findAllAgents();
+            if (agents.isEmpty()) return;
+
+            User nearest = null;
+            double minDist = Double.MAX_VALUE;
+
+            for (User agent : agents) {
+                if (agent.getAgentLatitude() == null || agent.getAgentLongitude() == null) continue;
+                double dist = haversine(report.getLatitude(), report.getLongitude(),
+                                       agent.getAgentLatitude(), agent.getAgentLongitude());
+                if (dist < minDist) { minDist = dist; nearest = agent; }
+            }
+
+            // Si aucun agent n'a de coordonnées, prendre le premier agent disponible
+            if (nearest == null) nearest = agents.get(0);
+
+            report.setAssignedAgentId(nearest.getId());
+            report.setAssignedAgentName(nearest.getFullName());
+            report.setSecteur(nearest.getSecteur());
+            reportRepository.update(report);
+        } catch (Exception e) {
+            System.err.println("[ReportService] Auto-assignation échouée : " + e.getMessage());
+        }
+    }
+
+    private double haversine(double lat1, double lon1, double lat2, double lon2) {
+        final double R = 6371000;
+        double dLat = Math.toRadians(lat2 - lat1);
+        double dLon = Math.toRadians(lon2 - lon1);
+        double a = Math.sin(dLat/2) * Math.sin(dLat/2)
+                 + Math.cos(Math.toRadians(lat1)) * Math.cos(Math.toRadians(lat2))
+                 * Math.sin(dLon/2) * Math.sin(dLon/2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
     }
 
     public ReportResponse findById(UUID id) {
@@ -101,11 +139,17 @@ public class ReportService {
         return toResponse(report);
     }
 
-    public List<ReportResponse> findAll(int page, int size, String status, String category) {
-        return reportRepository.findAll(page, size, status, category)
-            .stream()
-            .map(this::toResponse)
-            .collect(Collectors.toList());
+    public List<ReportResponse> findAll(int page, int size, String status, String category, UUID agentId) {
+        List<Report> reports = agentId != null
+            ? reportRepository.findByAgentId(agentId, page, size, status, category)
+            : reportRepository.findAll(page, size, status, category);
+        return reports.stream().map(this::toResponse).collect(Collectors.toList());
+    }
+
+    public java.util.Map<String, Long> getStats(UUID agentId) {
+        return agentId != null
+            ? reportRepository.countStatsByAgent(agentId)
+            : reportRepository.countStats();
     }
 
     public List<ReportResponse> findNearby(double lng, double lat, double radiusMeters) {
@@ -224,7 +268,10 @@ public class ReportService {
             report.getCreatedAt(),
             report.getAgentNotes(),
             report.getPriorityId(),
-            priorityTitle
+            priorityTitle,
+            report.getAssignedAgentId(),
+            report.getAssignedAgentName(),
+            report.getSecteur()
         );
     }
 }

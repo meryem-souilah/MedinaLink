@@ -94,6 +94,66 @@
   --dur-fast: 0.15s; --dur-mid: 0.3s; --dur-slow: 0.65s;
 }
 
+/* ── LIGHT MODE ─────────────────────────────────────────────── */
+[data-theme="light"] {
+  --void:    #FDF8F2;
+  --depth:   #F5EDE0;
+  --surface: #EDE0CE;
+  --elevated:#E4D0B8;
+  --overlay: rgba(253,248,242,0.92);
+
+  --glass:        rgba(139,94,60,0.06);
+  --glass-hover:  rgba(139,94,60,0.12);
+  --glass-border: rgba(139,94,60,0.18);
+
+  --terra:        #B5521F;
+  --terra-bright: #C4622D;
+  --terra-pale:   #D97340;
+  --terra-dim:    rgba(181,82,31,0.12);
+  --terra-border: rgba(181,82,31,0.3);
+
+  --amber:        #B8852A;
+  --amber-bright: #C9973D;
+  --amber-dim:    rgba(184,133,42,0.12);
+  --amber-border: rgba(184,133,42,0.28);
+
+  --clay:         #7A4F2C;
+  --clay-dim:     rgba(122,79,44,0.12);
+
+  --green:        #2E7D52;
+  --green-dim:    rgba(46,125,82,0.12);
+  --red:          #C0392B;
+  --red-dim:      rgba(192,57,43,0.12);
+  --blue:         #2B6CB0;
+  --blue-dim:     rgba(43,108,176,0.12);
+  --stat-amber:   #B8852A;
+
+  --text-bright: #1A0D06;
+  --text-warm:   #3D1F0A;
+  --text-body:   #6B3D18;
+  --text-muted:  #8B5E3C;
+  --text-faint:  #A07858;
+
+  --border-subtle: rgba(139,94,60,0.1);
+  --border-vis:    rgba(139,94,60,0.2);
+  --border-terra:  rgba(181,82,31,0.35);
+  --border-amber:  rgba(184,133,42,0.35);
+
+  --glow-terra: 0 0 20px rgba(181,82,31,0.12);
+  --glow-amber: 0 0 20px rgba(184,133,42,0.1);
+  --shadow-sm:  0 2px 8px  rgba(100,60,20,0.12);
+  --shadow-md:  0 8px 24px rgba(100,60,20,0.16);
+  --shadow-lg:  0 16px 48px rgba(100,60,20,0.2);
+  --shadow-xl:  0 32px 80px rgba(100,60,20,0.25);
+
+  --gold:        var(--terra);
+  --gold-bright: var(--terra-bright);
+  --gold-dim:    var(--terra-dim);
+  --gold-border: var(--terra-border);
+  --teal:        var(--amber);
+  --teal-dim:    var(--amber-dim);
+}
+
 /* ── Global Reset ───────────────────────────────────────────── */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 html { scroll-behavior: smooth; }
@@ -762,6 +822,13 @@ button, input, select, textarea { font-family: var(--font-body); }
   cursor: pointer; transition: all var(--dur-fast);
 }
 .btn-nav-logout:hover { color: var(--red); border-color: rgba(217,95,75,0.3); }
+.btn-nav-theme {
+  font-size: 1rem; background: transparent; border: none;
+  cursor: pointer; padding: 0.3rem 0.4rem; border-radius: var(--r-sm);
+  transition: transform var(--dur-fast);
+  line-height: 1;
+}
+.btn-nav-theme:hover { transform: scale(1.2); }
 .app-nav.admin { border-bottom-color: rgba(217,95,75,0.2); }
 .app-nav.admin .app-nav-brand { color: var(--red); }
 

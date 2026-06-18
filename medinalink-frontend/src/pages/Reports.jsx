@@ -23,11 +23,14 @@ const CAT_LABELS = {
 };
 
 function timeAgo(dateStr) {
-  const diff = (Date.now() - new Date(dateStr)) / 1000;
+  if (!dateStr) return '—';
+  const utc = dateStr.endsWith('Z') ? dateStr : dateStr + 'Z';
+  const diff = (Date.now() - new Date(utc)) / 1000;
   if (diff < 60)     return 'À l\'instant';
-  if (diff < 3600)   return `${Math.floor(diff/60)}min`;
-  if (diff < 86400)  return `${Math.floor(diff/3600)}h`;
-  return `${Math.floor(diff/86400)}j`;
+  if (diff < 3600)   return `${Math.floor(diff/60)} min`;
+  if (diff < 86400)  return `${Math.floor(diff/3600)} h`;
+  if (diff < 604800) return `${Math.floor(diff/86400)} j`;
+  return new Date(utc).toLocaleDateString('fr-FR', { day:'numeric', month:'short' });
 }
 
 export default function Reports() {

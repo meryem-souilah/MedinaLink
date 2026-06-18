@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import gsap from 'gsap';
@@ -14,6 +14,17 @@ export default function Navbar() {
   const isAdmin   = user?.role === 'ADMIN';
 
   const active = (path) => pathname === path ? ' active' : '';
+
+  // ── Theme toggle ────────────────────────────────────────────
+  const [isDark, setIsDark] = useState(() => {
+    const saved = localStorage.getItem('ml-theme');
+    return saved ? saved === 'dark' : true;
+  });
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    localStorage.setItem('ml-theme', isDark ? 'dark' : 'light');
+  }, [isDark]);
 
   /* Subtle entrance */
   useEffect(() => {
@@ -45,6 +56,9 @@ export default function Navbar() {
             <span className="app-nav-user-dot" />
             {user?.fullName}
           </span>
+          <button onClick={() => setIsDark(p => !p)} className="btn-nav-theme" title={isDark ? 'Mode jour' : 'Mode nuit'}>
+            {isDark ? '☀️' : '🌙'}
+          </button>
           <button onClick={handleLogout} className="btn-nav-logout">Déconnexion</button>
         </div>
       </nav>
@@ -67,6 +81,9 @@ export default function Navbar() {
             <span className="app-nav-user-dot" />
             {user?.fullName}
           </span>
+          <button onClick={() => setIsDark(p => !p)} className="btn-nav-theme" title={isDark ? 'Mode jour' : 'Mode nuit'}>
+            {isDark ? '☀️' : '🌙'}
+          </button>
           <button onClick={handleLogout} className="btn-nav-logout">Déconnexion</button>
         </div>
       </nav>
@@ -89,6 +106,9 @@ export default function Navbar() {
             <span className="app-nav-user-dot" style={{ background: 'var(--red)', boxShadow: '0 0 6px var(--red)' }} />
             {user?.fullName}
           </span>
+          <button onClick={() => setIsDark(p => !p)} className="btn-nav-theme" title={isDark ? 'Mode jour' : 'Mode nuit'}>
+            {isDark ? '☀️' : '🌙'}
+          </button>
           <button onClick={handleLogout} className="btn-nav-logout">Déconnexion</button>
         </div>
       </nav>

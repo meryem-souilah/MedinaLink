@@ -42,14 +42,29 @@ public class UserResource {
     // Créer un compte agent ou admin — réservé à l'ADMIN
     // Body : { "fullName": "...", "email": "...", "password": "...", "role": "AGENT|ADMIN" }
     // -------------------------------------------------------
+    @GET
+    @Path("/agents")
+    public Response getAgents() {
+        try {
+            List<UserDto> agents = userRepository.findAllAgents()
+                .stream().map(UserDto::from).collect(java.util.stream.Collectors.toList());
+            return Response.ok(agents).build();
+        } catch (Exception e) {
+            return Response.status(500).entity(Map.of("message", e.getMessage())).build();
+        }
+    }
+
     @POST
     @Path("/create-user")
     public Response createUser(Map<String, String> body) {
         try {
-            String fullName = body.get("fullName");
-            String email    = body.get("email");
-            String password = body.get("password");
-            String roleStr  = body.getOrDefault("role", "AGENT");
+            String fullName  = body.get("fullName");
+            String email     = body.get("email");
+            String password  = body.get("password");
+            String roleStr   = body.getOrDefault("role", "AGENT");
+            String secteur   = body.get("secteur");
+            String latStr    = body.get("agentLatitude");
+            String lngStr    = body.get("agentLongitude");
 
             if (fullName == null || fullName.isBlank())
                 return Response.status(400).entity(Map.of("message", "Le nom complet est obligatoire")).build();
@@ -74,6 +89,13 @@ public class UserResource {
             newUser.setEmail(email.toLowerCase().trim());
             newUser.setPasswordHash(hash);
             newUser.setRole(role);
+            if (secteur != null && !secteur.isBlank()) newUser.setSecteur(secteur.trim());
+            if (latStr != null && !latStr.isBlank()) {
+                try { newUser.setAgentLatitude(Double.parseDouble(latStr)); } catch (NumberFormatException ignored) {}
+            }
+            if (lngStr != null && !lngStr.isBlank()) {
+                try { newUser.setAgentLongitude(Double.parseDouble(lngStr)); } catch (NumberFormatException ignored) {}
+            }
 
             User saved = userRepository.save(newUser);
             return Response.status(201).entity(UserDto.from(saved)).build();
@@ -109,6 +131,9 @@ public class UserResource {
         public String fullName;
         public String email;
         public String role;
+        public String secteur;
+        public Double agentLatitude;
+        public Double agentLongitude;
 
         public static UserDto from(User u) {
             UserDto dto = new UserDto();
@@ -116,6 +141,9 @@ public class UserResource {
             dto.fullName = u.getFullName();
             dto.email = u.getEmail();
             dto.role = u.getRole().name();
+            dto.secteur = u.getSecteur();
+            dto.agentLatitude = u.getAgentLatitude();
+            dto.agentLongitude = u.getAgentLongitude();
             return dto;
         }
     }

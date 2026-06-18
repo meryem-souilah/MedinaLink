@@ -30,8 +30,13 @@ public class JwtFilter implements ContainerRequestFilter {
             return;
         }
 
-        // GET /reports et GET /reports/nearby : lecture publique
+        // GET /reports, /reports/nearby, /reports/stats : lecture publique
         if (method.equals("GET") && path.contains("/reports")) {
+            return;
+        }
+
+        // GET /users/agents : accessible aux agents et admins
+        if (method.equals("GET") && path.endsWith("/agents")) {
             return;
         }
 

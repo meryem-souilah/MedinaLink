@@ -19,10 +19,15 @@ const CAT_COLORS = { ROAD:'#60a5fa', LIGHTING:'#fbbf24', WATER:'#22d3ee', WASTE:
 
 function getSLA(createdAt) {
   if (!createdAt) return { label: '—', cls: 'green' };
-  const days = Math.floor((Date.now() - new Date(createdAt)) / 86400000);
+  const utc  = createdAt.endsWith('Z') ? createdAt : createdAt + 'Z';
+  const days = Math.floor((Date.now() - new Date(utc)) / 86400000);
   if (days > 7) return { label: `${days}j`, cls: 'red' };
   if (days > 2) return { label: `${days}j`, cls: 'orange' };
-  return          { label: `${days}j`, cls: 'green' };
+  if (days === 0) {
+    const h = Math.floor((Date.now() - new Date(utc)) / 3600000);
+    return { label: h < 1 ? '< 1h' : `${h}h`, cls: 'green' };
+  }
+  return { label: `${days}j`, cls: 'green' };
 }
 
 function downloadCSV(reports) {
@@ -61,6 +66,7 @@ export default function Dashboard() {
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo,   setFilterDateTo]   = useState('');
   const [sortBy,         setSortBy]         = useState('date');
+  const [zoneOnly,       setZoneOnly]       = useState(true);
 
   // Bulk actions
   const [selectedIds, setSelectedIds] = useState(new Set());
@@ -92,16 +98,18 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (user?.role === 'CITIZEN') { navigate('/citizen/reports'); return; }
-    fetchReports();
-  }, []);
+    fetchReports(zoneOnly);
+  }, [zoneOnly]);
 
   useEffect(() => {
     agentBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [agentMessages, agentLoading]);
 
-  const fetchReports = async () => {
+  const fetchReports = async (myZone = false) => {
+    setLoading(true);
     try {
-      const res = await api.get('/reports?page=0&size=100');
+      const agentParam = (myZone && user?.role === 'AGENT') ? `&agentId=${user.userId}` : '';
+      const res = await api.get(`/reports?page=0&size=200${agentParam}`);
       setReports(res.data);
     } catch (err) {
       console.error(err);
@@ -158,7 +166,7 @@ export default function Dashboard() {
     setUpdatingId(id);
     try {
       await api.put(`/reports/${id}/status`, { status: newStatus });
-      fetchReports();
+      fetchReports(zoneOnly);
     } catch { alert('Erreur lors de la mise à jour'); }
     finally { setUpdatingId(null); }
   };
@@ -168,7 +176,7 @@ export default function Dashboard() {
     setBulkLoading(true);
     try {
       await Promise.all([...selectedIds].map(id => api.put(`/reports/${id}/status`, { status: bulkStatus })));
-      setSelectedIds(new Set()); setBulkStatus(''); fetchReports();
+      setSelectedIds(new Set()); setBulkStatus(''); fetchReports(zoneOnly);
     } catch { alert('Erreur lors de la mise à jour en lot'); }
     finally { setBulkLoading(false); }
   };
@@ -272,11 +280,35 @@ export default function Dashboard() {
           <div className="page-head" style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:'1rem' }}>
             <div>
               <h1 className="page-head-title">Tableau de bord</h1>
-              <p className="page-head-sub">Gestion et suivi des signalements citoyens</p>
+              <p className="page-head-sub">
+                {user?.role === 'AGENT' && zoneOnly
+                  ? `Ma zone — ${reports[0]?.secteur || 'Secteur non défini'}`
+                  : 'Gestion et suivi des signalements citoyens'}
+              </p>
             </div>
-            <button onClick={() => downloadCSV(filteredReports)} className="btn btn-ghost">
-              ↓ Exporter CSV ({filteredReports.length})
-            </button>
+            <div style={{ display:'flex', gap:'0.5rem', alignItems:'center', flexWrap:'wrap' }}>
+              {user?.role === 'AGENT' && (
+                <div style={{ display:'flex', background:'var(--glass)', borderRadius:'var(--r-md)', padding:3, gap:3 }}>
+                  <button
+                    onClick={() => setZoneOnly(true)}
+                    className={`btn btn-sm ${zoneOnly ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ borderRadius:'var(--r-sm)' }}
+                  >
+                    📍 Ma zone
+                  </button>
+                  <button
+                    onClick={() => setZoneOnly(false)}
+                    className={`btn btn-sm ${!zoneOnly ? 'btn-primary' : 'btn-ghost'}`}
+                    style={{ borderRadius:'var(--r-sm)' }}
+                  >
+                    🌍 Tous
+                  </button>
+                </div>
+              )}
+              <button onClick={() => downloadCSV(filteredReports)} className="btn btn-ghost">
+                ↓ Exporter CSV ({filteredReports.length})
+              </button>
+            </div>
           </div>
 
           {/* Stats bar */}
@@ -432,12 +464,12 @@ export default function Dashboard() {
                         checked={selectedIds.size===filteredReports.length && filteredReports.length>0}
                       />
                     </th>
-                    {['Cat.','Titre','Adresse','Citoyen','Statut','SLA','Priorité','Actions'].map(h => <th key={h}>{h}</th>)}
+                    {['Cat.','Titre','Adresse','Citoyen','Secteur','Statut','SLA','Priorité','Actions'].map(h => <th key={h}>{h}</th>)}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredReports.length === 0 ? (
-                    <tr><td colSpan={9} style={{ textAlign:'center', padding:'2.5rem', color:'var(--text-muted)', fontSize:'0.875rem' }}>
+                    <tr><td colSpan={10} style={{ textAlign:'center', padding:'2.5rem', color:'var(--text-muted)', fontSize:'0.875rem' }}>
                       Aucun signalement correspondant aux filtres
                     </td></tr>
                   ) : filteredReports.map(report => {
@@ -464,6 +496,16 @@ export default function Dashboard() {
                           {report.address || `${report.latitude?.toFixed(3)}, ${report.longitude?.toFixed(3)}`}
                         </td>
                         <td style={{ color:'var(--text-body)' }}>{report.userFullName}</td>
+                        <td style={{ fontSize:'0.78rem' }}>
+                          {report.secteur
+                            ? <span style={{ background:'var(--teal-dim,rgba(20,184,166,0.15))', color:'var(--teal)', borderRadius:4, padding:'2px 7px', fontWeight:600 }}>
+                                📍 {report.secteur}
+                              </span>
+                            : <span style={{ color:'var(--text-faint)' }}>—</span>}
+                          {report.assignedAgentName && !zoneOnly && (
+                            <div style={{ fontSize:'0.7rem', color:'var(--text-muted)', marginTop:2 }}>{report.assignedAgentName}</div>
+                          )}
+                        </td>
                         <td><span className={`badge ${st.cls}`}><span className="badge-dot"/>{st.label}</span></td>
                         <td><span className={`sla sla-${sla.cls}`}>{sla.label}</span></td>
                         <td style={{ fontSize:'0.75rem', color:'var(--text-muted)', maxWidth:120, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>

@@ -20,6 +20,9 @@ public class ReportResponse {
     private String agentNotes;
     private UUID priorityId;
     private String priorityTitle;
+    private UUID assignedAgentId;
+    private String assignedAgentName;
+    private String secteur;
 
     public ReportResponse() {}
 
@@ -28,7 +31,8 @@ public class ReportResponse {
                           String category, String status, Integer upvotes,
                           String photoUrl, String userFullName,
                           LocalDateTime createdAt, String agentNotes,
-                          UUID priorityId, String priorityTitle) {
+                          UUID priorityId, String priorityTitle,
+                          UUID assignedAgentId, String assignedAgentName, String secteur) {
         this.id = id;
         this.title = title;
         this.description = description;
@@ -44,6 +48,9 @@ public class ReportResponse {
         this.agentNotes = agentNotes;
         this.priorityId = priorityId;
         this.priorityTitle = priorityTitle;
+        this.assignedAgentId = assignedAgentId;
+        this.assignedAgentName = assignedAgentName;
+        this.secteur = secteur;
     }
 
     public UUID getId() { return id; }
@@ -61,6 +68,9 @@ public class ReportResponse {
     public String getAgentNotes() { return agentNotes; }
     public UUID getPriorityId() { return priorityId; }
     public String getPriorityTitle() { return priorityTitle; }
+    public UUID getAssignedAgentId() { return assignedAgentId; }
+    public String getAssignedAgentName() { return assignedAgentName; }
+    public String getSecteur() { return secteur; }
 
     public void setId(UUID id) { this.id = id; }
     public void setTitle(String title) { this.title = title; }
@@ -77,4 +87,7 @@ public class ReportResponse {
     public void setAgentNotes(String agentNotes) { this.agentNotes = agentNotes; }
     public void setPriorityId(UUID priorityId) { this.priorityId = priorityId; }
     public void setPriorityTitle(String priorityTitle) { this.priorityTitle = priorityTitle; }
+    public void setAssignedAgentId(UUID assignedAgentId) { this.assignedAgentId = assignedAgentId; }
+    public void setAssignedAgentName(String assignedAgentName) { this.assignedAgentName = assignedAgentName; }
+    public void setSecteur(String secteur) { this.secteur = secteur; }
 }

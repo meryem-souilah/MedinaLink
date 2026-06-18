@@ -44,10 +44,23 @@ public class ReportResource {
             @QueryParam("page")     @DefaultValue("0")  int page,
             @QueryParam("size")     @DefaultValue("20") int size,
             @QueryParam("status")   String status,
-            @QueryParam("category") String category) {
+            @QueryParam("category") String category,
+            @QueryParam("agentId")  String agentIdStr) {
         try {
-            var reports = reportService.findAll(page, size, status, category);
+            UUID agentId = (agentIdStr != null && !agentIdStr.isBlank()) ? UUID.fromString(agentIdStr) : null;
+            var reports = reportService.findAll(page, size, status, category, agentId);
             return Response.ok(reports).build();
+        } catch (Exception e) {
+            return Response.status(500).entity(Map.of("message", e.getMessage())).build();
+        }
+    }
+
+    @GET
+    @Path("/stats")
+    public Response getStats(@QueryParam("agentId") String agentIdStr) {
+        try {
+            UUID agentId = (agentIdStr != null && !agentIdStr.isBlank()) ? UUID.fromString(agentIdStr) : null;
+            return Response.ok(reportService.getStats(agentId)).build();
         } catch (Exception e) {
             return Response.status(500).entity(Map.of("message", e.getMessage())).build();
         }

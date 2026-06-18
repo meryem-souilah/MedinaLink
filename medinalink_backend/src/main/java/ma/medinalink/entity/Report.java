@@ -61,6 +61,15 @@ public class Report {
     @Column(name = "priority_id")
     private java.util.UUID priorityId;
 
+    @Column(name = "assigned_agent_id")
+    private java.util.UUID assignedAgentId;
+
+    @Column(name = "assigned_agent_name", length = 150)
+    private String assignedAgentName;
+
+    @Column(name = "secteur", length = 150)
+    private String secteur;
+
     public Report() {}
 
     @PrePersist
@@ -91,6 +100,9 @@ public class Report {
     public LocalDateTime getUpdatedAt() { return updatedAt; }
     public String getAgentNotes() { return agentNotes; }
     public java.util.UUID getPriorityId() { return priorityId; }
+    public java.util.UUID getAssignedAgentId() { return assignedAgentId; }
+    public String getAssignedAgentName() { return assignedAgentName; }
+    public String getSecteur() { return secteur; }
 
     // Setters
     public void setId(UUID id) { this.id = id; }
@@ -109,4 +121,7 @@ public class Report {
     public void setUpdatedAt(LocalDateTime updatedAt) { this.updatedAt = updatedAt; }
     public void setAgentNotes(String agentNotes) { this.agentNotes = agentNotes; }
     public void setPriorityId(java.util.UUID priorityId) { this.priorityId = priorityId; }
+    public void setAssignedAgentId(java.util.UUID assignedAgentId) { this.assignedAgentId = assignedAgentId; }
+    public void setAssignedAgentName(String assignedAgentName) { this.assignedAgentName = assignedAgentName; }
+    public void setSecteur(String secteur) { this.secteur = secteur; }
 }

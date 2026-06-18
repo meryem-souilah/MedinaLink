@@ -30,6 +30,15 @@ public class User {
     @JoinColumn(name = "commune_id")
     private Commune commune;
 
+    @Column(name = "secteur", length = 150)
+    private String secteur;
+
+    @Column(name = "agent_latitude")
+    private Double agentLatitude;
+
+    @Column(name = "agent_longitude")
+    private Double agentLongitude;
+
     @Column(name = "created_at")
     private LocalDateTime createdAt;
 
@@ -55,6 +64,9 @@ public class User {
     public String getFullName() { return fullName; }
     public Role getRole() { return role; }
     public Commune getCommune() { return commune; }
+    public String getSecteur() { return secteur; }
+    public Double getAgentLatitude() { return agentLatitude; }
+    public Double getAgentLongitude() { return agentLongitude; }
     public LocalDateTime getCreatedAt() { return createdAt; }
     public boolean isActive() { return isActive; }
 
@@ -65,6 +77,9 @@ public class User {
     public void setFullName(String fullName) { this.fullName = fullName; }
     public void setRole(Role newRole) { this.role = newRole; }
     public void setCommune(Commune commune) { this.commune = commune; }
+    public void setSecteur(String secteur) { this.secteur = secteur; }
+    public void setAgentLatitude(Double agentLatitude) { this.agentLatitude = agentLatitude; }
+    public void setAgentLongitude(Double agentLongitude) { this.agentLongitude = agentLongitude; }
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public void setActive(boolean active) { isActive = active; }
 }

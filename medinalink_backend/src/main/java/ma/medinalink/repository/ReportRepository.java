@@ -138,6 +138,40 @@ public class ReportRepository {
     }
 
     // -------------------------------------------------------
+    // Signalements assignés à un agent (avec filtres)
+    // -------------------------------------------------------
+    public List<Report> findByAgentId(UUID agentId, int page, int size, String status, String category) {
+        StringBuilder jpql = new StringBuilder("SELECT r FROM Report r WHERE r.assignedAgentId = :agentId");
+        if (status != null && !status.isBlank())   jpql.append(" AND r.status = :status");
+        if (category != null && !category.isBlank()) jpql.append(" AND r.category = :category");
+        jpql.append(" ORDER BY r.createdAt DESC");
+
+        var query = em.createQuery(jpql.toString(), Report.class).setParameter("agentId", agentId);
+        if (status != null && !status.isBlank())   query.setParameter("status", status);
+        if (category != null && !category.isBlank()) query.setParameter("category", category);
+        return query.setFirstResult(page * size).setMaxResults(size).getResultList();
+    }
+
+    // -------------------------------------------------------
+    // Statistiques par agent
+    // -------------------------------------------------------
+    public java.util.Map<String, Long> countStatsByAgent(UUID agentId) {
+        List<Object[]> rows = em.createQuery(
+            "SELECT r.status, COUNT(r) FROM Report r WHERE r.assignedAgentId = :agentId GROUP BY r.status",
+            Object[].class
+        ).setParameter("agentId", agentId).getResultList();
+        java.util.Map<String, Long> map = new java.util.HashMap<>();
+        long total = 0L;
+        for (Object[] row : rows) {
+            long count = (Long) row[1];
+            map.put((String) row[0], count);
+            total += count;
+        }
+        map.put("TOTAL", total);
+        return map;
+    }
+
+    // -------------------------------------------------------
     // Statistiques globales : nombre de signalements par statut
     // -------------------------------------------------------
     public java.util.Map<String, Long> countStats() {

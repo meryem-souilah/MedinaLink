@@ -92,6 +92,16 @@ public void updateRole(UUID id, ma.medinalink.entity.Role newRole) {
     }
 }
     // -------------------------------------------------------
+    // Tous les agents actifs (pour l'assignation géographique)
+    // -------------------------------------------------------
+    public List<User> findAllAgents() {
+        return em.createQuery(
+            "SELECT u FROM User u WHERE u.role = ma.medinalink.entity.Role.AGENT AND u.isActive = true",
+            User.class
+        ).getResultList();
+    }
+
+    // -------------------------------------------------------
     // Vérifier si un email est déjà utilisé
     // -------------------------------------------------------
     public boolean existsByEmail(String email) {
