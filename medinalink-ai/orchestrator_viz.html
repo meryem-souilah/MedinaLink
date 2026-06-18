@@ -1,0 +1,800 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<title>MedinaLink — Orchestrateur IA</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f172a;
+    color: #e2e8f0;
+    min-height: 100vh;
+  }
+
+  /* ── Header ── */
+  header {
+    background: linear-gradient(135deg, #1a365d, #2b6cb0);
+    padding: 28px 40px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+  header h1 { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+  header h1 span { color: rgba(255,255,255,0.5); font-weight: 300; }
+  .header-badge {
+    background: rgba(255,255,255,0.12);
+    border: 1px solid rgba(255,255,255,0.2);
+    border-radius: 20px;
+    padding: 5px 14px;
+    font-size: 12px;
+    color: rgba(255,255,255,0.8);
+  }
+
+  /* ── Main layout ── */
+  .container { max-width: 1100px; margin: 0 auto; padding: 40px 24px; }
+
+  /* ── Section title ── */
+  .section-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #63b3ed;
+    margin-bottom: 20px;
+  }
+
+  /* ══════════════════════════════════
+     FLOW DIAGRAM
+  ══════════════════════════════════ */
+  .flow-section { margin-bottom: 48px; }
+
+  .flow-wrapper {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 16px;
+    padding: 36px 24px;
+    overflow-x: auto;
+  }
+
+  .flow-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    flex-wrap: nowrap;
+    min-width: 800px;
+  }
+
+  /* Nodes */
+  .node {
+    border-radius: 12px;
+    padding: 14px 18px;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    position: relative;
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: default;
+    min-width: 110px;
+  }
+  .node:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.4); }
+
+  .node-request {
+    background: #1a4a3a;
+    border: 2px solid #38a169;
+    color: #9ae6b4;
+  }
+  .node-orch {
+    background: #1a365d;
+    border: 2px solid #4299e1;
+    color: #90cdf4;
+    min-width: 140px;
+    padding: 18px 24px;
+  }
+  .node-agent {
+    background: #2d1b69;
+    border: 2px solid #7c3aed;
+    color: #c4b5fd;
+    min-width: 130px;
+  }
+  .node-groq {
+    background: #3d1515;
+    border: 2px solid #e53e3e;
+    color: #feb2b2;
+    min-width: 130px;
+  }
+  .node-response {
+    background: #1a3a4a;
+    border: 2px solid #319795;
+    color: #81e6d9;
+  }
+
+  .node-icon { font-size: 22px; margin-bottom: 5px; }
+  .node-label { font-size: 12px; opacity: 0.7; font-weight: 400; margin-top: 3px; }
+
+  /* Arrows */
+  .arrow {
+    display: flex;
+    align-items: center;
+    padding: 0 6px;
+    color: #4a5568;
+    font-size: 20px;
+    position: relative;
+  }
+  .arrow-line {
+    width: 40px;
+    height: 2px;
+    background: linear-gradient(90deg, #4a5568, #718096);
+    position: relative;
+  }
+  .arrow-line::after {
+    content: '';
+    position: absolute;
+    right: -6px;
+    top: -4px;
+    border: 5px solid transparent;
+    border-left-color: #718096;
+  }
+
+  /* Animated packet */
+  @keyframes packet-flow {
+    0%   { left: 0; opacity: 0; }
+    10%  { opacity: 1; }
+    90%  { opacity: 1; }
+    100% { left: calc(100% - 10px); opacity: 0; }
+  }
+  .packet {
+    position: absolute;
+    top: -5px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #63b3ed;
+    animation: packet-flow 2s linear infinite;
+  }
+
+  /* ══════════════════════════════════
+     ROUTING TABLE
+  ══════════════════════════════════ */
+  .routing-section { margin-bottom: 48px; }
+
+  .routing-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+  }
+
+  .route-card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: border-color 0.2s, transform 0.2s;
+    cursor: pointer;
+  }
+  .route-card:hover { border-color: #4299e1; transform: translateY(-2px); }
+  .route-card.active { border-color: #63b3ed; box-shadow: 0 0 0 3px rgba(99,179,237,0.2); }
+
+  .route-header {
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid #334155;
+  }
+  .route-header.classify { background: #1a4a3a; }
+  .route-header.citizen  { background: #1a365d; }
+  .route-header.agent    { background: #2d1b69; }
+  .route-header.analyze  { background: #3d1515; }
+
+  .route-title { font-weight: 700; font-size: 14px; }
+  .route-badge {
+    font-size: 11px;
+    padding: 3px 10px;
+    border-radius: 10px;
+    font-weight: 600;
+  }
+  .badge-green  { background: rgba(56,161,105,0.25); color: #9ae6b4; }
+  .badge-blue   { background: rgba(66,153,225,0.25); color: #90cdf4; }
+  .badge-purple { background: rgba(124,58,237,0.25); color: #c4b5fd; }
+  .badge-red    { background: rgba(229,62,62,0.25);  color: #feb2b2; }
+
+  .route-body { padding: 16px 18px; font-size: 13px; }
+  .route-row { display: flex; gap: 10px; margin-bottom: 8px; align-items: flex-start; }
+  .route-key { color: #718096; min-width: 90px; font-size: 12px; }
+  .route-val { color: #e2e8f0; }
+
+  /* ══════════════════════════════════
+     LIVE DEMO
+  ══════════════════════════════════ */
+  .demo-section { margin-bottom: 48px; }
+
+  .demo-box {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 16px;
+    padding: 28px;
+  }
+
+  .demo-controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+  }
+
+  .demo-controls select, .demo-controls input {
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 8px;
+    color: #e2e8f0;
+    padding: 10px 14px;
+    font-size: 13px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .demo-controls select:focus, .demo-controls input:focus {
+    border-color: #4299e1;
+  }
+  .demo-controls select { min-width: 160px; }
+  .demo-controls input { flex: 1; min-width: 200px; }
+
+  .btn-send {
+    background: #2b6cb0;
+    border: none;
+    border-radius: 8px;
+    color: white;
+    padding: 10px 24px;
+    font-size: 13px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.1s;
+    white-space: nowrap;
+  }
+  .btn-send:hover { background: #3182ce; }
+  .btn-send:active { transform: scale(0.97); }
+  .btn-send:disabled { background: #4a5568; cursor: not-allowed; }
+
+  /* Trace panel */
+  .trace-panel {
+    background: #0f172a;
+    border: 1px solid #1e293b;
+    border-radius: 10px;
+    padding: 18px;
+    font-family: 'Courier New', monospace;
+    font-size: 12px;
+    min-height: 120px;
+    max-height: 320px;
+    overflow-y: auto;
+    line-height: 1.8;
+  }
+  .trace-panel .log-line { display: flex; gap: 12px; }
+  .trace-panel .log-ts   { color: #4a5568; }
+  .trace-panel .log-cyan { color: #63b3ed; }
+  .trace-panel .log-green{ color: #68d391; }
+  .trace-panel .log-yellow{ color: #f6e05e; }
+  .trace-panel .log-red  { color: #fc8181; }
+  .trace-panel .log-white{ color: #e2e8f0; }
+  .trace-panel .log-muted{ color: #4a5568; }
+
+  /* ══════════════════════════════════
+     AGENT CARDS (bottom)
+  ══════════════════════════════════ */
+  .agents-section { margin-bottom: 48px; }
+
+  .agents-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+  }
+
+  .agent-card {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 12px;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .agent-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+
+  .agent-card-header {
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .agent-card-header.classify { background: linear-gradient(135deg, #1a4a3a, #276749); }
+  .agent-card-header.citizen  { background: linear-gradient(135deg, #1a365d, #2b6cb0); }
+  .agent-card-header.agent    { background: linear-gradient(135deg, #2d1b69, #553c9a); }
+  .agent-card-header.analyze  { background: linear-gradient(135deg, #3d1515, #9b2335); }
+
+  .agent-num { font-size: 11px; opacity: 0.6; font-weight: 700; letter-spacing: 1px; }
+  .agent-title { font-weight: 700; font-size: 14px; }
+
+  .agent-card-body { padding: 14px 16px; font-size: 12px; }
+  .agent-meta { margin-bottom: 6px; color: #94a3b8; }
+  .agent-meta strong { color: #e2e8f0; }
+  .agent-desc { color: #94a3b8; line-height: 1.5; margin-top: 8px; }
+
+  /* Temp gauge */
+  .temp-gauge { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+  .gauge-track {
+    flex: 1;
+    height: 5px;
+    background: #334155;
+    border-radius: 3px;
+    overflow: hidden;
+  }
+  .gauge-fill {
+    height: 100%;
+    border-radius: 3px;
+    transition: width 0.4s;
+  }
+  .gauge-fill.low    { background: #63b3ed; }
+  .gauge-fill.mid    { background: #f6ad55; }
+  .gauge-fill.high   { background: #fc8181; }
+  .gauge-label { font-size: 11px; color: #718096; white-space: nowrap; }
+
+  /* ── Blinking cursor ── */
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  .cursor { animation: blink 1s step-end infinite; }
+
+  /* ── Pulse ── */
+  @keyframes pulse-ring {
+    0% { transform: scale(1); opacity: 1; }
+    100% { transform: scale(1.4); opacity: 0; }
+  }
+  .pulse {
+    display: inline-block;
+    width: 8px; height: 8px;
+    background: #68d391;
+    border-radius: 50%;
+    position: relative;
+  }
+  .pulse::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: #68d391;
+    border-radius: 50%;
+    animation: pulse-ring 1.5s ease-out infinite;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Medina<span>Link</span> — Orchestrateur IA</h1>
+  <div class="header-badge">
+    <span class="pulse"></span>&nbsp; 4 agents actifs · llama-3.3-70b-versatile
+  </div>
+</header>
+
+<div class="container">
+
+  <!-- ══ FLUX DIAGRAM ══ -->
+  <div class="flow-section">
+    <div class="section-title">Flux de traitement</div>
+    <div class="flow-wrapper">
+      <div class="flow-row">
+
+        <div class="node node-request">
+          <div class="node-icon">📨</div>
+          Requête
+          <div class="node-label">Frontend / Backend</div>
+        </div>
+
+        <div class="arrow">
+          <div class="arrow-line"><div class="packet" style="animation-delay:0s"></div></div>
+        </div>
+
+        <div class="node node-orch">
+          <div class="node-icon">🎛️</div>
+          Orchestrateur
+          <div class="node-label">route selon type + contexte</div>
+        </div>
+
+        <div class="arrow">
+          <div class="arrow-line"><div class="packet" style="animation-delay:0.5s"></div></div>
+        </div>
+
+        <div class="node node-agent">
+          <div class="node-icon">🤖</div>
+          Agent sélectionné
+          <div class="node-label">prompt + température</div>
+        </div>
+
+        <div class="arrow">
+          <div class="arrow-line"><div class="packet" style="animation-delay:1s"></div></div>
+        </div>
+
+        <div class="node node-groq">
+          <div class="node-icon">⚡</div>
+          Groq API
+          <div class="node-label">llama-3.3-70b</div>
+        </div>
+
+        <div class="arrow">
+          <div class="arrow-line"><div class="packet" style="animation-delay:1.5s"></div></div>
+        </div>
+
+        <div class="node node-response">
+          <div class="node-icon">✅</div>
+          Réponse
+          <div class="node-label">JSON ou texte</div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ ROUTING TABLE ══ -->
+  <div class="routing-section">
+    <div class="section-title">Règles de routage de l'orchestrateur</div>
+    <div class="routing-grid">
+
+      <div class="route-card" onclick="highlight(this, 'classify')">
+        <div class="route-header classify">
+          <span class="route-title">classify</span>
+          <span class="route-badge badge-green">Classification Agent</span>
+        </div>
+        <div class="route-body">
+          <div class="route-row">
+            <span class="route-key">request_type</span>
+            <span class="route-val"><code>"classify"</code></span>
+          </div>
+          <div class="route-row">
+            <span class="route-key">context_type</span>
+            <span class="route-val">— (ignoré)</span>
+          </div>
+          <div class="route-row">
+            <span class="route-key">Sortie</span>
+            <span class="route-val">JSON : category + priority + confidence</span>
+          </div>
+          <div class="route-row">
+            <span class="route-key">Déclenché par</span>
+            <span class="route-val">Création d'un signalement sans catégorie</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="route-card" onclick="highlight(this, 'citizen')">
+        <div class="route-header citizen">
+          <span class="route-title">chat + citizen</span>
+          <span class="route-badge badge-blue">Citizen Assistant</span>
+        </div>
+        <div class="route-body">
+          <div class="route-row">
+            <span class="route-key">request_type</span>
+            <span class="route-val"><code>"chat"</code></span>
+          </div>
+          <div class="route-row">
+            <span class="route-key">context_type</span>
+            <span class="route-val"><code>"citizen"</code></span>
+          </div>
+          <div class="route-row">
+            <span class="route-key">Sortie</span>
+            <span class="route-val">Réponse conversationnelle + tableau Markdown</span>
+          </div>
+          <div class="route-row">
+            <span class="route-key">Déclenché par</span>
+            <span class="route-val">ChatWidget page "Créer un signalement"</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="route-card" onclick="highlight(this, 'agent')">
+        <div class="route-header agent">
+          <span class="route-title">chat + agent</span>
+          <span class="route-badge badge-purple">Municipal Agent</span>
+        </div>
+        <div class="route-body">
+          <div class="route-row">
+            <span class="route-key">request_type</span>
+            <span class="route-val"><code>"chat"</code></span>
+          </div>
+          <div class="route-row">
+            <span class="route-key">context_type</span>
+            <span class="route-val"><code>"agent"</code></span>
+          </div>
+          <div class="route-row">
+            <span class="route-key">Sortie</span>
+            <span class="route-val">Analyse professionnelle + recommandations</span>
+          </div>
+          <div class="route-row">
+            <span class="route-key">Déclenché par</span>
+            <span class="route-val">ChatWidget Dashboard agent municipal</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="route-card" onclick="highlight(this, 'analyze')">
+        <div class="route-header analyze">
+          <span class="route-title">analyze</span>
+          <span class="route-badge badge-red">Report Analyzer</span>
+        </div>
+        <div class="route-body">
+          <div class="route-row">
+            <span class="route-key">request_type</span>
+            <span class="route-val"><code>"analyze"</code></span>
+          </div>
+          <div class="route-row">
+            <span class="route-key">context_type</span>
+            <span class="route-val">— (ignoré)</span>
+          </div>
+          <div class="route-row">
+            <span class="route-key">Sortie</span>
+            <span class="route-val">5 sections : résumé, urgence, action, réponse, doublons</span>
+          </div>
+          <div class="route-row">
+            <span class="route-key">Déclenché par</span>
+            <span class="route-val">Bouton "Analyser" dans le Dashboard</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ══ LIVE DEMO ══ -->
+  <div class="demo-section">
+    <div class="section-title">Démo live — Appel réel à l'orchestrateur</div>
+    <div class="demo-box">
+      <div class="demo-controls">
+        <select id="reqType" onchange="updatePlaceholder()">
+          <option value="classify">classify</option>
+          <option value="chat-citizen">chat + citizen</option>
+          <option value="chat-agent">chat + agent</option>
+          <option value="analyze">analyze</option>
+        </select>
+        <input type="text" id="userInput" placeholder="Ex: Nid de poule dangereux devant l'école"
+               onkeydown="if(event.key==='Enter') sendDemo()">
+        <button class="btn-send" id="sendBtn" onclick="sendDemo()">▶ Envoyer</button>
+      </div>
+      <div class="trace-panel" id="tracePanel">
+        <div class="log-line">
+          <span class="log-muted">──</span>
+          <span class="log-muted">En attente d'une requête... Sélectionnez un type et écrivez un message.</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ AGENT CARDS ══ -->
+  <div class="agents-section">
+    <div class="section-title">Les 4 agents enregistrés</div>
+    <div class="agents-grid">
+
+      <div class="agent-card" id="card-classify">
+        <div class="agent-card-header classify">
+          <div class="agent-num">AGENT 01</div>
+          <div class="agent-title">Classification Agent</div>
+        </div>
+        <div class="agent-card-body">
+          <div class="agent-meta">Endpoint : <strong>POST /classify</strong></div>
+          <div class="temp-gauge">
+            <span class="gauge-label">Temp.</span>
+            <div class="gauge-track"><div class="gauge-fill low" style="width:10%"></div></div>
+            <span class="gauge-label">0.1</span>
+          </div>
+          <div class="agent-meta">Max tokens : <strong>150</strong></div>
+          <div class="agent-desc">Sortie JSON strict. Déterministe. Catégorie + priorité + confidence.</div>
+        </div>
+      </div>
+
+      <div class="agent-card" id="card-citizen">
+        <div class="agent-card-header citizen">
+          <div class="agent-num">AGENT 02</div>
+          <div class="agent-title">Citizen Assistant</div>
+        </div>
+        <div class="agent-card-body">
+          <div class="agent-meta">Endpoint : <strong>POST /chat</strong></div>
+          <div class="temp-gauge">
+            <span class="gauge-label">Temp.</span>
+            <div class="gauge-track"><div class="gauge-fill high" style="width:70%"></div></div>
+            <span class="gauge-label">0.7</span>
+          </div>
+          <div class="agent-meta">Max tokens : <strong>500</strong></div>
+          <div class="agent-desc">Conversationnel. Enrichi avec stats + liste des signalements en temps réel.</div>
+        </div>
+      </div>
+
+      <div class="agent-card" id="card-agent">
+        <div class="agent-card-header agent">
+          <div class="agent-num">AGENT 03</div>
+          <div class="agent-title">Municipal Agent</div>
+        </div>
+        <div class="agent-card-body">
+          <div class="agent-meta">Endpoint : <strong>POST /chat</strong></div>
+          <div class="temp-gauge">
+            <span class="gauge-label">Temp.</span>
+            <div class="gauge-track"><div class="gauge-fill mid" style="width:50%"></div></div>
+            <span class="gauge-label">0.5</span>
+          </div>
+          <div class="agent-meta">Max tokens : <strong>500</strong></div>
+          <div class="agent-desc">Professionnel. Contexte du signalement injecté. Recommandations concrètes.</div>
+        </div>
+      </div>
+
+      <div class="agent-card" id="card-analyze">
+        <div class="agent-card-header analyze">
+          <div class="agent-num">AGENT 04</div>
+          <div class="agent-title">Report Analyzer</div>
+        </div>
+        <div class="agent-card-body">
+          <div class="agent-meta">Endpoint : <strong>POST /analyze</strong></div>
+          <div class="temp-gauge">
+            <span class="gauge-label">Temp.</span>
+            <div class="gauge-track"><div class="gauge-fill low" style="width:30%"></div></div>
+            <span class="gauge-label">0.3</span>
+          </div>
+          <div class="agent-meta">Max tokens : <strong>600</strong></div>
+          <div class="agent-desc">Analyse structurée 5 sections. Contexte géospatial (signalements proches).</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+</div>
+
+<script>
+  const AI_URL = 'http://localhost:5000';
+
+  function updatePlaceholder() {
+    const t = document.getElementById('reqType').value;
+    const i = document.getElementById('userInput');
+    const placeholders = {
+      'classify':     'Ex: Nid de poule dangereux devant l\'école primaire',
+      'chat-citizen': 'Ex: J\'ai un problème de fuite d\'eau dans ma rue',
+      'chat-agent':   'Ex: Résume ce signalement et propose une action',
+      'analyze':      'Ex: Lampadaire cassé depuis 3 jours, rue sombre la nuit',
+    };
+    i.placeholder = placeholders[t];
+  }
+
+  function ts() {
+    return new Date().toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+  }
+
+  function addLog(text, color = 'white') {
+    const panel = document.getElementById('tracePanel');
+    const line = document.createElement('div');
+    line.className = 'log-line';
+    line.innerHTML = `<span class="log-muted">${ts()}</span><span class="log-${color}">${text}</span>`;
+    panel.appendChild(line);
+    panel.scrollTop = panel.scrollHeight;
+  }
+
+  function clearLog() {
+    document.getElementById('tracePanel').innerHTML = '';
+  }
+
+  function highlightCard(key) {
+    document.querySelectorAll('.agent-card').forEach(c => c.style.boxShadow = '');
+    const map = { classify: 'card-classify', 'chat-citizen': 'card-citizen', 'chat-agent': 'card-agent', analyze: 'card-analyze' };
+    const card = document.getElementById(map[key]);
+    if (card) card.style.boxShadow = '0 0 0 3px rgba(99,179,237,0.6), 0 8px 32px rgba(0,0,0,0.4)';
+  }
+
+  function highlight(el, key) {
+    document.querySelectorAll('.route-card').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    highlightCard(key);
+    document.getElementById('reqType').value =
+      key === 'citizen' ? 'chat-citizen' :
+      key === 'agent'   ? 'chat-agent'   : key;
+    updatePlaceholder();
+  }
+
+  async function sendDemo() {
+    const typeVal = document.getElementById('reqType').value;
+    const text    = document.getElementById('userInput').value.trim();
+    if (!text) { addLog('⚠️  Veuillez écrire un message.', 'yellow'); return; }
+
+    const btn = document.getElementById('sendBtn');
+    btn.disabled = true;
+    clearLog();
+
+    // ── Log orchestration ──
+    const agentMap = {
+      'classify':     'Classification Agent  (température 0.1)',
+      'chat-citizen': 'Citizen Assistant     (température 0.7)',
+      'chat-agent':   'Municipal Agent       (température 0.5)',
+      'analyze':      'Report Analyzer       (température 0.3)',
+    };
+    const reqTypeLabel = {
+      'classify': 'classify', 'chat-citizen': 'chat + citizen',
+      'chat-agent': 'chat + agent', 'analyze': 'analyze',
+    };
+
+    addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'muted');
+    addLog(`[ORCHESTRATEUR] Requête reçue : "${reqTypeLabel[typeVal]}"`, 'cyan');
+    addLog(`[ORCHESTRATEUR] → Agent sélectionné : ${agentMap[typeVal]}`, 'green');
+    addLog(`[GROQ]  Envoi vers llama-3.3-70b-versatile...`, 'cyan');
+    addLog(`[GROQ]  Input : "${text.slice(0,60)}${text.length>60?'…':''}"`, 'yellow');
+
+    highlightCard(typeVal);
+
+    try {
+      let result;
+
+      // ── classify ──
+      if (typeVal === 'classify') {
+        const res = await fetch(`${AI_URL}/classify`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: text, description: '' }),
+        });
+        result = await res.json();
+        addLog(`[GROQ]  ✅ Réponse reçue !`, 'green');
+        addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'muted');
+        addLog(`  Catégorie  : ${result.category}`, 'green');
+        addLog(`  Priorité   : ${result.priority} / 5`, result.priority >= 4 ? 'red' : result.priority >= 3 ? 'yellow' : 'green');
+        addLog(`  Confidence : ${(result.confidence * 100).toFixed(0)}%`, 'white');
+      }
+
+      // ── chat (citizen or agent) ──
+      else if (typeVal === 'chat-citizen' || typeVal === 'chat-agent') {
+        const ctxType = typeVal === 'chat-citizen' ? 'citizen' : 'agent';
+        const res = await fetch(`${AI_URL}/chat`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: [{ role: 'user', content: text }],
+            context_type: ctxType,
+          }),
+        });
+        result = await res.json();
+        addLog(`[GROQ]  ✅ Réponse reçue !`, 'green');
+        addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'muted');
+        const reply = (result.reply || '').replace(/\\n/g, '\n');
+        reply.split('\n').forEach(line => {
+          if (line.trim()) addLog('  ' + line, 'white');
+        });
+      }
+
+      // ── analyze ──
+      else if (typeVal === 'analyze') {
+        const res = await fetch(`${AI_URL}/analyze`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            title: text,
+            description: '',
+            category: 'OTHER',
+            status: 'PENDING',
+            upvotes: 0,
+            address: '',
+            nearby_reports: [],
+          }),
+        });
+        result = await res.json();
+        addLog(`[GROQ]  ✅ Réponse reçue !`, 'green');
+        addLog(`━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`, 'muted');
+        const analysis = (result.analysis || '').replace(/\\n/g, '\n');
+        analysis.split('\n').forEach(line => {
+          if (!line.trim()) return;
+          if (line.match(/^[1-9]\./)) addLog(line, 'yellow');
+          else addLog('  ' + line, 'white');
+        });
+      }
+
+    } catch (err) {
+      addLog(`[ERREUR] Impossible de joindre le service IA (${AI_URL})`, 'red');
+      addLog(`  → Vérifiez que le conteneur medinalink-ai est démarré.`, 'yellow');
+      addLog(`  → docker ps | grep medinalink-ai`, 'muted');
+    }
+
+    btn.disabled = false;
+  }
+
+  // Init
+  updatePlaceholder();
+</script>
+
+</body>
+</html>

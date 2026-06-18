@@ -1,0 +1,57 @@
+package ma.medinalink.resource;
+
+import jakarta.inject.Inject;
+import jakarta.ws.rs.*;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.Response;
+import ma.medinalink.repository.UserRepository;
+import ma.medinalink.entity.User;
+import ma.medinalink.entity.Role;
+
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.stream.Collectors;
+
+@Path("/users")
+@Produces(MediaType.APPLICATION_JSON)
+@Consumes(MediaType.APPLICATION_JSON)
+public class UserResource {
+
+    @Inject
+    private UserRepository userRepository;
+
+    // GET /api/v1/users — liste tous les utilisateurs (ADMIN)
+    @GET
+    public Response getAllUsers() {
+        try {
+            List<User> users = userRepository.findAll();
+            List<Map<String, Object>> result = users.stream()
+                .map(u -> Map.of(
+                    "id", u.getId().toString(),
+                    "email", u.getEmail(),
+                    "fullName", u.getFullName(),
+                    "role", u.getRole().name()
+                ))
+                .collect(Collectors.toList());
+            return Response.ok(result).build();
+        } catch (Exception e) {
+            return Response.status(500)
+                .entity(Map.of("message", e.getMessage())).build();
+        }
+    }
+
+    // PUT /api/v1/users/{id}/role — changer le rôle (ADMIN)
+    @PUT
+    @Path("/{id}/role")
+    public Response updateRole(@PathParam("id") UUID id, Map<String, String> body) {
+        try {
+            String newRole = body.get("role");
+            userRepository.updateRole(id, Role.valueOf(newRole));
+            return Response.ok(Map.of("message", "Rôle mis à jour")).build();
+        } catch (Exception e) {
+            return Response.status(400)
+                .entity(Map.of("message", "Rôle invalide : " + e.getMessage())).build();
+        }
+    }
+}

@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0
+         http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <!-- Identité du projet -->
+    <groupId>ma.medinalink</groupId>
+    <artifactId>medinalink-backend</artifactId>
+    <version>1.0.0</version>
+    <packaging>war</packaging>
+    <name>MedinaLink Backend</name>
+
+    <properties>
+        <maven.compiler.source>17</maven.compiler.source>
+        <maven.compiler.target>17</maven.compiler.target>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+    </properties>
+
+    <dependencies>
+
+        <!-- ===== JAKARTA EE 10 (le cœur du projet) ===== -->
+        <!-- Contient JAX-RS (API REST), CDI (injection), JPA (BDD) -->
+        <dependency>
+            <groupId>jakarta.platform</groupId>
+            <artifactId>jakarta.jakartaee-api</artifactId>
+            <version>10.0.0</version>
+            <scope>provided</scope>
+            <!-- "provided" = WildFly l'inclut déjà, pas besoin de le mettre dans le .war -->
+        </dependency>
+
+        <!-- ===== POSTGRESQL Driver ===== -->
+        <!-- Permet à Java de parler à PostgreSQL -->
+        <dependency>
+            <groupId>org.postgresql</groupId>
+            <artifactId>postgresql</artifactId>
+            <version>42.7.1</version>
+        </dependency>
+
+        <!-- ===== JWT (JSON Web Token) ===== -->
+        <!-- Pour générer et vérifier les tokens d'authentification -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>0.12.3</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>0.12.3</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-jackson</artifactId>
+            <version>0.12.3</version>
+            <scope>runtime</scope>
+        </dependency>
+
+        <!-- ===== BCrypt (hashage des mots de passe) ===== -->
+        <!-- On ne stocke JAMAIS un mot de passe en clair ! -->
+        <dependency>
+            <groupId>org.mindrot</groupId>
+            <artifactId>jbcrypt</artifactId>
+            <version>0.4</version>
+        </dependency>
+
+        <!-- ===== Lombok (évite le code répétitif) ===== -->
+        <!-- Génère automatiquement getters, setters, constructeurs -->
+        <dependency>
+            <groupId>org.projectlombok</groupId>
+            <artifactId>lombok</artifactId>
+            <version>1.18.30</version>
+            <scope>provided</scope>
+        </dependency>
+
+        <!-- ===== Tests ===== -->
+        <dependency>
+            <groupId>org.junit.jupiter</groupId>
+            <artifactId>junit-jupiter</artifactId>
+            <version>5.10.1</version>
+            <scope>test</scope>
+        </dependency>
+<!-- ================================================ -->
+<!-- AJOUTER ces dépendances dans ton pom.xml existant -->
+<!-- dans la section <dependencies>                    -->
+<!-- ================================================ -->
+
+<!-- Hibernate Spatial : permet à JPA de comprendre les types géospatiaux -->
+<!-- (GEOMETRY, Point, Polygon...) de PostGIS -->
+<dependency>
+    <groupId>org.hibernate.orm</groupId>
+    <artifactId>hibernate-spatial</artifactId>
+    <version>6.4.1.Final</version>
+</dependency>
+
+<!-- JTS Topology Suite : librairie pour manipuler les objets géospatiaux -->
+<!-- en Java (Point, Polygon, etc.) -->
+<dependency>
+    <groupId>org.locationtech.jts</groupId>
+    <artifactId>jts-core</artifactId>
+    <version>1.19.0</version>
+</dependency>
+
+        <!-- ===== Redis Client (Jedis) ===== -->
+        <dependency>
+            <groupId>redis.clients</groupId>
+            <artifactId>jedis</artifactId>
+            <version>4.4.3</version>
+        </dependency>
+
+        <!-- ===== Jackson JSR-310 : support LocalDateTime / LocalDate ===== -->
+        <dependency>
+            <groupId>com.fasterxml.jackson.datatype</groupId>
+            <artifactId>jackson-datatype-jsr310</artifactId>
+            <version>2.15.4</version>
+        </dependency>
+
+    </dependencies>
+
+    <build>
+        <finalName>medinalink</finalName>
+        <plugins>
+            <!-- Plugin pour créer le fichier .war (déploiement WildFly) -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-war-plugin</artifactId>
+                <version>3.4.0</version>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

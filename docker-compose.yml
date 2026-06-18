@@ -1,0 +1,98 @@
+services:
+
+  # ── PostgreSQL + PostGIS ──────────────────────────────────────
+  postgres:
+    image: postgis/postgis:16-3.4
+    container_name: medinalink-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB:       ${POSTGRES_DB:-medinalink}
+      POSTGRES_USER:     ${POSTGRES_USER:-medinalink}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-medinalink}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-medinalink}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ────────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    container_name: medinalink-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Backend WildFly ──────────────────────────────────────────
+  backend:
+    build:
+      context: ./medinalink_backend
+      dockerfile: Dockerfile
+    container_name: medinalink-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DB_URL:                 jdbc:postgresql://postgres:5432/${POSTGRES_DB:-medinalink}
+      DB_USER:                ${POSTGRES_USER:-medinalink}
+      DB_PASSWORD:            ${POSTGRES_PASSWORD:-medinalink}
+      MEDINALINK_JWT_SECRET:  ${MEDINALINK_JWT_SECRET:-medinalink-super-secret-key-2024-casablanca-maroc-jwt}
+      REDIS_ENABLED:          ${REDIS_ENABLED:-true}
+      REDIS_HOST:             redis
+      REDIS_PORT:             6379
+      REDIS_PASSWORD:         ""
+      AI_SERVICE_URL:         http://medinalink-ai:5000
+    ports:
+      - "8080:8080"
+      - "9990:9990"
+
+  # ── AI Microservice (Groq) ───────────────────────────────────
+  medinalink-ai:
+    build:
+      context: ./medinalink-ai
+      dockerfile: Dockerfile
+    container_name: medinalink-ai
+    restart: unless-stopped
+    environment:
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      GROQ_MODEL:   ${GROQ_MODEL:-llama-3.3-70b-versatile}
+    ports:
+      - "5001:5000"
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:5000/health')\""]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+
+  # ── Frontend React/Nginx ─────────────────────────────────────
+  frontend:
+    build:
+      context: ./medinalink-frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8080/medinalink/api/v1}
+        VITE_WS_URL:  ${VITE_WS_URL:-ws://localhost:8080/medinalink}
+    container_name: medinalink-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "3000:80"
+
+volumes:
+  postgres_data:
+  redis_data:

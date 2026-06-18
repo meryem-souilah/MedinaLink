@@ -1,0 +1,36 @@
+# ── Node / Frontend ───────────────────────────────────────────────
+medinalink-frontend/node_modules/
+medinalink-frontend/dist/
+medinalink-frontend/.env
+medinalink-frontend/.env.local
+medinalink-frontend/.env.production.local
+
+# ── Java / Maven ──────────────────────────────────────────────────
+medinalink_backend/target/
+medinalink_backend/.classpath
+medinalink_backend/.project
+medinalink_backend/.settings/
+*.class
+*.jar
+*.war
+
+# ── Python / AI ───────────────────────────────────────────────────
+medinalink-ai/__pycache__/
+medinalink-ai/*.pyc
+medinalink-ai/.venv/
+medinalink-ai/venv/
+medinalink-ai/.env
+
+# ── Environnement ─────────────────────────────────────────────────
+.env
+.env.local
+.env.production
+
+# ── OS ────────────────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+
+# ── IDE ───────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.iml

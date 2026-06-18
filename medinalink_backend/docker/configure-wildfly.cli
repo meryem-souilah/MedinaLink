@@ -1,0 +1,31 @@
+# Configure le standalone.xml existant de l'image WildFly :
+# ajoute le driver PostgreSQL et le datasource MedinalinkDS.
+# Les expressions ${env.*} sont évaluées au DÉMARRAGE du conteneur.
+
+embed-server --server-config=standalone.xml
+
+# Module PostgreSQL
+module add \
+    --name=org.postgresql \
+    --resources=/tmp/postgresql-42.7.1.jar \
+    --dependencies=javax.api,javax.transaction.api
+
+# Enregistrer le driver JDBC
+/subsystem=datasources/jdbc-driver=postgresql:add(\
+    driver-name=postgresql,\
+    driver-module-name=org.postgresql,\
+    driver-xa-datasource-class-name=org.postgresql.xa.PGXADataSource)
+
+# Créer le datasource (URL/user/password via variables d'env)
+data-source add \
+    --name=MedinalinkDS \
+    --driver-name=postgresql \
+    --jndi-name=java:jboss/datasources/MedinalinkDS \
+    --connection-url="${env.DB_URL:jdbc:postgresql://postgres:5432/medinalink}" \
+    --user-name="${env.DB_USER:medinalink}" \
+    --password="${env.DB_PASSWORD:medinalink}" \
+    --use-ccm=false \
+    --jta=true \
+    --enabled=true
+
+stop-embedded-server
