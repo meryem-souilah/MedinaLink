@@ -261,8 +261,28 @@ public class ReportService {
     }
 
     public int assignPendingReportsToAgent(User agent) {
-        if (agent.getSecteur() == null || agent.getSecteur().isBlank()) return 0;
-        List<Report> pending = reportRepository.findPendingBySector(agent.getSecteur());
+        List<Report> pending;
+
+        if (agent.getAgentLatitude() != null && agent.getAgentLongitude() != null) {
+            // GPS disponible : chercher tous les PENDING dans un rayon de 50 km
+            final double RADIUS_METERS = 50_000;
+            double radiusDeg = RADIUS_METERS / 111_000.0;
+            List<Report> box = reportRepository.findPendingInBoundingBox(
+                agent.getAgentLatitude(), agent.getAgentLongitude(), radiusDeg
+            );
+            // Filtre haversine exact pour exclure les coins du bounding box
+            pending = box.stream()
+                .filter(r -> r.getLatitude() != null && r.getLongitude() != null
+                    && haversine(agent.getAgentLatitude(), agent.getAgentLongitude(),
+                                 r.getLatitude(), r.getLongitude()) <= RADIUS_METERS)
+                .collect(Collectors.toList());
+        } else if (agent.getSecteur() != null && !agent.getSecteur().isBlank()) {
+            // Fallback textuel : adresse contient le nom du secteur
+            pending = reportRepository.findPendingBySectorText(agent.getSecteur());
+        } else {
+            return 0;
+        }
+
         for (Report report : pending) {
             report.setAssignedAgentId(agent.getId());
             report.setAssignedAgentName(agent.getFullName());

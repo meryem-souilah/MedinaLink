@@ -190,9 +190,28 @@ public class ReportRepository {
     }
 
     // -------------------------------------------------------
-    // Signalements PENDING dont l'adresse contient le secteur donné
+    // Signalements PENDING dans une zone GPS (bounding box rapide)
+    // Le filtre haversine exact est fait côté service
     // -------------------------------------------------------
-    public List<Report> findPendingBySector(String sector) {
+    public List<Report> findPendingInBoundingBox(double lat, double lng, double radiusDegrees) {
+        return em.createQuery(
+            "SELECT r FROM Report r WHERE r.status = 'PENDING' " +
+            "AND r.latitude  BETWEEN :latMin AND :latMax " +
+            "AND r.longitude BETWEEN :lngMin AND :lngMax",
+            Report.class
+        )
+        .setParameter("latMin", lat - radiusDegrees)
+        .setParameter("latMax", lat + radiusDegrees)
+        .setParameter("lngMin", lng - radiusDegrees)
+        .setParameter("lngMax", lng + radiusDegrees)
+        .getResultList();
+    }
+
+    // -------------------------------------------------------
+    // Signalements PENDING dont l'adresse contient le secteur donné
+    // (fallback textuel quand l'agent n'a pas de GPS)
+    // -------------------------------------------------------
+    public List<Report> findPendingBySectorText(String sector) {
         String pattern = "%" + sector.toLowerCase() + "%";
         return em.createQuery(
             "SELECT r FROM Report r WHERE r.status = 'PENDING' AND LOWER(r.address) LIKE :pattern",
