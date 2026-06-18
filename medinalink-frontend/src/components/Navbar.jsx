@@ -18,7 +18,7 @@ export default function Navbar() {
   // ── Theme toggle ────────────────────────────────────────────
   const [isDark, setIsDark] = useState(() => {
     const saved = localStorage.getItem('ml-theme');
-    return saved ? saved === 'dark' : true;
+    return saved ? saved === 'dark' : false;
   });
 
   useEffect(() => {
@@ -39,6 +39,12 @@ export default function Navbar() {
     navigate('/login');
   };
 
+  const themeBtn = (
+    <button onClick={() => setIsDark(p => !p)} className="btn-nav-theme" title={isDark ? 'Mode jour' : 'Mode nuit'}>
+      {isDark ? '☀️' : '🌙'}
+    </button>
+  );
+
   if (isCitizen) {
     return (
       <nav className="app-nav" ref={navRef}>
@@ -52,13 +58,8 @@ export default function Navbar() {
           <Link to="/citizen/reports/create" className="app-nav-cta">+ Signaler</Link>
         </div>
         <div className="app-nav-right">
-          <span className="app-nav-user">
-            <span className="app-nav-user-dot" />
-            {user?.fullName}
-          </span>
-          <button onClick={() => setIsDark(p => !p)} className="btn-nav-theme" title={isDark ? 'Mode jour' : 'Mode nuit'}>
-            {isDark ? '☀️' : '🌙'}
-          </button>
+          <Link to="/profile" className={`app-nav-link${active('/profile')}`} style={{ fontSize:'0.8rem' }}>Mon profil</Link>
+          {themeBtn}
           <button onClick={handleLogout} className="btn-nav-logout">Déconnexion</button>
         </div>
       </nav>
@@ -81,9 +82,8 @@ export default function Navbar() {
             <span className="app-nav-user-dot" />
             {user?.fullName}
           </span>
-          <button onClick={() => setIsDark(p => !p)} className="btn-nav-theme" title={isDark ? 'Mode jour' : 'Mode nuit'}>
-            {isDark ? '☀️' : '🌙'}
-          </button>
+          <Link to="/profile" className={`app-nav-link${active('/profile')}`} style={{ fontSize:'0.8rem' }}>Mon profil</Link>
+          {themeBtn}
           <button onClick={handleLogout} className="btn-nav-logout">Déconnexion</button>
         </div>
       </nav>
@@ -106,9 +106,8 @@ export default function Navbar() {
             <span className="app-nav-user-dot" style={{ background: 'var(--red)', boxShadow: '0 0 6px var(--red)' }} />
             {user?.fullName}
           </span>
-          <button onClick={() => setIsDark(p => !p)} className="btn-nav-theme" title={isDark ? 'Mode jour' : 'Mode nuit'}>
-            {isDark ? '☀️' : '🌙'}
-          </button>
+          <Link to="/profile" className={`app-nav-link${active('/profile')}`} style={{ fontSize:'0.8rem' }}>Mon profil</Link>
+          {themeBtn}
           <button onClick={handleLogout} className="btn-nav-logout">Déconnexion</button>
         </div>
       </nav>

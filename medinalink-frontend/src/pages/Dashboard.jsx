@@ -4,6 +4,8 @@ import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import { renderMarkdown } from '../utils/renderMarkdown';
 import Navbar from '../components/Navbar';
+import Toast from '../components/Toast';
+import { useToast } from '../hooks/useToast';
 
 /* ── Constants ──────────────────────────────────────────────── */
 const STATUS = {
@@ -66,6 +68,7 @@ export default function Dashboard() {
   const [filterDateFrom, setFilterDateFrom] = useState('');
   const [filterDateTo,   setFilterDateTo]   = useState('');
   const [sortBy,         setSortBy]         = useState('date');
+  const [searchQuery,    setSearchQuery]    = useState('');
   const [zoneOnly,       setZoneOnly]       = useState(true);
 
   // Bulk actions
@@ -93,8 +96,9 @@ export default function Dashboard() {
   const [selectedPriorityId,  setSelectedPriorityId]  = useState('');
   const [linkingPriority,     setLinkingPriority]     = useState(false);
 
-  const { user } = useAuth();
-  const navigate = useNavigate();
+  const { user }          = useAuth();
+  const navigate          = useNavigate();
+  const { toasts, toast } = useToast();
 
   useEffect(() => {
     if (user?.role === 'CITIZEN') { navigate('/citizen/reports'); return; }
@@ -136,6 +140,16 @@ export default function Dashboard() {
       if (filterCategory && rep.category !== filterCategory) return false;
       if (filterDateFrom && rep.createdAt && rep.createdAt.slice(0,10) < filterDateFrom) return false;
       if (filterDateTo   && rep.createdAt && rep.createdAt.slice(0,10) > filterDateTo)   return false;
+      if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        if (
+          !rep.title?.toLowerCase().includes(q) &&
+          !rep.description?.toLowerCase().includes(q) &&
+          !rep.address?.toLowerCase().includes(q) &&
+          !rep.userFullName?.toLowerCase().includes(q) &&
+          !rep.secteur?.toLowerCase().includes(q)
+        ) return false;
+      }
       return true;
     });
     if (sortBy === 'votes') return [...r].sort((a,b) => (b.upvotes||0)-(a.upvotes||0));
@@ -166,8 +180,9 @@ export default function Dashboard() {
     setUpdatingId(id);
     try {
       await api.put(`/reports/${id}/status`, { status: newStatus });
+      toast('Statut mis à jour', 'success');
       fetchReports(zoneOnly);
-    } catch { alert('Erreur lors de la mise à jour'); }
+    } catch { toast('Erreur lors de la mise à jour', 'error'); }
     finally { setUpdatingId(null); }
   };
 
@@ -176,8 +191,9 @@ export default function Dashboard() {
     setBulkLoading(true);
     try {
       await Promise.all([...selectedIds].map(id => api.put(`/reports/${id}/status`, { status: bulkStatus })));
+      toast(`${selectedIds.size} signalement(s) mis à jour`, 'success');
       setSelectedIds(new Set()); setBulkStatus(''); fetchReports(zoneOnly);
-    } catch { alert('Erreur lors de la mise à jour en lot'); }
+    } catch { toast('Erreur lors de la mise à jour en lot', 'error'); }
     finally { setBulkLoading(false); }
   };
 
@@ -244,7 +260,8 @@ export default function Dashboard() {
       await api.put(`/reports/${detailsModal.id}/notes`, { notes: notesValue });
       setReports(prev => prev.map(r => r.id===detailsModal.id ? {...r, agentNotes:notesValue} : r));
       setDetailsModal(prev => ({...prev, agentNotes:notesValue}));
-    } catch { alert('Erreur lors de la sauvegarde des notes'); }
+      toast('Notes sauvegardées', 'success');
+    } catch { toast('Erreur lors de la sauvegarde des notes', 'error'); }
     finally { setSavingNotes(false); }
   };
 
@@ -256,7 +273,8 @@ export default function Dashboard() {
       const upd = res.data;
       setReports(prev => prev.map(r => r.id===detailsModal.id ? {...r, priorityId:upd.priorityId, priorityTitle:upd.priorityTitle} : r));
       setDetailsModal(prev => ({...prev, priorityId:upd.priorityId, priorityTitle:upd.priorityTitle}));
-    } catch { alert('Erreur lors de la liaison avec la priorité'); }
+      toast('Priorité liée avec succès', 'success');
+    } catch { toast('Erreur lors de la liaison avec la priorité', 'error'); }
     finally { setLinkingPriority(false); }
   };
 
@@ -400,6 +418,15 @@ export default function Dashboard() {
 
           {/* Filters */}
           <div className="filters-bar" style={{ marginBottom:'1rem' }}>
+            <div className="search-wrap">
+              <span className="search-icon-inner">🔍</span>
+              <input
+                type="text" value={searchQuery}
+                onChange={e => setSearchQuery(e.target.value)}
+                placeholder="Titre, adresse, citoyen, secteur…"
+                className="search-input"
+              />
+            </div>
             <select className="filter-select" value={filterStatus}   onChange={e => setFilterStatus(e.target.value)}>
               <option value="">Tous les statuts</option>
               <option value="PENDING">En attente</option>
@@ -411,18 +438,16 @@ export default function Dashboard() {
               <option value="">Toutes catégories</option>
               {Object.entries(CAT_LABELS).map(([k,v]) => <option key={k} value={k}>{CAT_ICONS[k]} {v}</option>)}
             </select>
-            <input type="date" className="filter-select" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} title="Date de début"
-              style={{ colorScheme:'dark' }} />
-            <input type="date" className="filter-select" value={filterDateTo}   onChange={e => setFilterDateTo(e.target.value)}   title="Date de fin"
-              style={{ colorScheme:'dark' }} />
+            <input type="date" className="filter-select date-input" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} title="Date de début" />
+            <input type="date" className="filter-select date-input" value={filterDateTo}   onChange={e => setFilterDateTo(e.target.value)}   title="Date de fin" />
             <select className="filter-select" value={sortBy} onChange={e => setSortBy(e.target.value)}>
               <option value="date">Plus récent</option>
               <option value="age">Plus ancien</option>
               <option value="votes">Plus de votes</option>
             </select>
-            {(filterStatus||filterCategory||filterDateFrom||filterDateTo) && (
+            {(searchQuery||filterStatus||filterCategory||filterDateFrom||filterDateTo) && (
               <button className="btn btn-ghost btn-sm"
-                onClick={() => { setFilterStatus(''); setFilterCategory(''); setFilterDateFrom(''); setFilterDateTo(''); }}>
+                onClick={() => { setSearchQuery(''); setFilterStatus(''); setFilterCategory(''); setFilterDateFrom(''); setFilterDateTo(''); }}>
                 ✕ Réinitialiser
               </button>
             )}
@@ -592,6 +617,8 @@ export default function Dashboard() {
           </div>
         </div>
       )}
+
+      <Toast toasts={toasts} />
 
       {/* ── Modal Détails ── */}
       {detailsModal && (

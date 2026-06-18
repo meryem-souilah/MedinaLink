@@ -1095,7 +1095,7 @@ button, input, select, textarea { font-family: var(--font-body); }
   padding: 1.1rem 1.5rem;
   border-bottom: 1px solid var(--border-subtle);
   display: flex; justify-content: space-between; align-items: center;
-  gap: 1rem;
+  gap: 1rem; flex-wrap: wrap;
 }
 .data-table-head h3 {
   font-family: var(--font-display);
@@ -1447,3 +1447,33 @@ button, input, select, textarea { font-family: var(--font-body); }
   .form-row { flex-direction: column; }
   .hero-ctas { flex-direction: column; align-items: center; }
 }
+
+/* ── Toast Notifications ───────────────────────────────────── */
+.toast-container {
+  position: fixed; bottom: 1.75rem; right: 1.75rem; z-index: 9999;
+  display: flex; flex-direction: column; gap: 0.6rem;
+  pointer-events: none;
+}
+.toast-item {
+  display: flex; align-items: center; gap: 0.65rem;
+  padding: 0.75rem 1.25rem; border-radius: var(--r-md);
+  font-size: 0.875rem; font-weight: 500; max-width: 340px;
+  box-shadow: var(--shadow-lg); backdrop-filter: blur(12px);
+  animation: toastIn 0.3s var(--ease-out);
+  pointer-events: auto;
+}
+.toast-icon { font-size: 0.95rem; flex-shrink: 0; }
+.toast-success { background: var(--green-dim); color: var(--green);  border: 1px solid rgba(76,175,125,0.3); }
+.toast-error   { background: var(--red-dim);   color: var(--red);    border: 1px solid rgba(217,95,75,0.3); }
+.toast-info    { background: var(--glass);     color: var(--text-body); border: 1px solid var(--glass-border); }
+.toast-warning { background: var(--amber-dim); color: var(--amber);  border: 1px solid var(--amber-border); }
+
+@keyframes toastIn {
+  from { transform: translateX(30px); opacity: 0; }
+  to   { transform: translateX(0);    opacity: 1; }
+}
+
+/* ── Date input color-scheme (theme-aware) ─────────────────── */
+.date-input { color-scheme: dark; }
+[data-theme="light"] .date-input { color-scheme: light; }
+

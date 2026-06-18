@@ -9,6 +9,7 @@ import Map        from './pages/Map';
 import Admin      from './pages/Admin';
 import Dashboard  from './pages/Dashboard';
 import Priorities from './pages/Priorities';
+import Profile    from './pages/Profile';
 
 // ── Guards ────────────────────────────────────────────────
 
@@ -80,6 +81,9 @@ export default function App() {
           <Route path="/admin/dashboard"  element={<AdminRoute><Admin /></AdminRoute>} />
           <Route path="/admin/reports"    element={<AdminRoute><Dashboard /></AdminRoute>} />
           <Route path="/admin/map"        element={<AdminRoute><Map /></AdminRoute>} />
+
+          {/* Profil — accessible à tous les utilisateurs connectés */}
+          <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
 
           {/* Racine */}
           <Route path="/"  element={<RoleRedirect />} />

@@ -99,18 +99,29 @@ export default function CreateReport() {
   }, [address]);
 
   const getMyLocation = () => {
-    if (!navigator.geolocation) { setError('Géolocalisation non supportée'); return; }
+    if (!navigator.geolocation) {
+      setError('Géolocalisation non supportée par votre navigateur');
+      return;
+    }
     setLocating(true);
+    setError('');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         setLatitude(pos.coords.latitude.toString());
         setLongitude(pos.coords.longitude.toString());
         setLocating(false);
       },
-      () => {
-        setError('Position indisponible, entrez les coordonnées manuellement');
+      (err) => {
         setLocating(false);
-      }
+        if (err.code === 1) {
+          setError('Accès refusé — autorisez la géolocalisation dans les paramètres de votre navigateur (icône 🔒 dans la barre d\'adresse) puis réessayez');
+        } else if (err.code === 2) {
+          setError('Position indisponible — vérifiez que le GPS est activé ou entrez les coordonnées manuellement');
+        } else {
+          setError('Délai dépassé — réessayez ou entrez les coordonnées manuellement');
+        }
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
   };
 
