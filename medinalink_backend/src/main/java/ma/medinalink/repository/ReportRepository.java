@@ -207,6 +207,34 @@ public class ReportRepository {
     }
 
     // -------------------------------------------------------
+    // Signalements PENDING dans un bounding box + catégorie
+    // -------------------------------------------------------
+    public List<Report> findPendingInBoundsAndCategory(
+            double latMin, double latMax, double lngMin, double lngMax, String category) {
+        return em.createQuery(
+            "SELECT r FROM Report r WHERE r.status = 'PENDING' " +
+            "AND r.latitude  BETWEEN :latMin AND :latMax " +
+            "AND r.longitude BETWEEN :lngMin AND :lngMax " +
+            "AND r.category = :category",
+            Report.class
+        )
+        .setParameter("latMin", latMin).setParameter("latMax", latMax)
+        .setParameter("lngMin", lngMin).setParameter("lngMax", lngMax)
+        .setParameter("category", category)
+        .getResultList();
+    }
+
+    // -------------------------------------------------------
+    // Signalements PENDING d'une catégorie donnée (toutes villes)
+    // -------------------------------------------------------
+    public List<Report> findPendingByCategory(String category) {
+        return em.createQuery(
+            "SELECT r FROM Report r WHERE r.status = 'PENDING' AND r.category = :category",
+            Report.class
+        ).setParameter("category", category).getResultList();
+    }
+
+    // -------------------------------------------------------
     // Signalements PENDING dont l'adresse contient le secteur donné
     // (fallback textuel quand l'agent n'a pas de GPS)
     // -------------------------------------------------------

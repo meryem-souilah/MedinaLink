@@ -62,13 +62,14 @@ public class UserResource {
     @Path("/create-user")
     public Response createUser(Map<String, String> body) {
         try {
-            String fullName  = body.get("fullName");
-            String email     = body.get("email");
-            String password  = body.get("password");
-            String roleStr   = body.getOrDefault("role", "AGENT");
-            String secteur   = body.get("secteur");
-            String latStr    = body.get("agentLatitude");
-            String lngStr    = body.get("agentLongitude");
+            String fullName   = body.get("fullName");
+            String email      = body.get("email");
+            String password   = body.get("password");
+            String roleStr    = body.getOrDefault("role", "AGENT");
+            String secteur    = body.get("secteur");
+            String categories = body.get("categories");
+            String latStr     = body.get("agentLatitude");
+            String lngStr     = body.get("agentLongitude");
 
             if (fullName == null || fullName.isBlank())
                 return Response.status(400).entity(Map.of("message", "Le nom complet est obligatoire")).build();
@@ -93,7 +94,8 @@ public class UserResource {
             newUser.setEmail(email.toLowerCase().trim());
             newUser.setPasswordHash(hash);
             newUser.setRole(role);
-            if (secteur != null && !secteur.isBlank()) newUser.setSecteur(secteur.trim());
+            if (secteur    != null && !secteur.isBlank())    newUser.setSecteur(secteur.trim());
+            if (categories != null && !categories.isBlank()) newUser.setAgentCategories(categories.trim());
             if (latStr != null && !latStr.isBlank()) {
                 try { newUser.setAgentLatitude(Double.parseDouble(latStr)); } catch (NumberFormatException ignored) {}
             }
@@ -179,6 +181,7 @@ public class UserResource {
         public String email;
         public String role;
         public String secteur;
+        public String agentCategories;
         public Double agentLatitude;
         public Double agentLongitude;
         public boolean isActive;
@@ -190,6 +193,7 @@ public class UserResource {
             dto.email = u.getEmail();
             dto.role = u.getRole().name();
             dto.secteur = u.getSecteur();
+            dto.agentCategories = u.getAgentCategories();
             dto.agentLatitude = u.getAgentLatitude();
             dto.agentLongitude = u.getAgentLongitude();
             dto.isActive = u.isActive();

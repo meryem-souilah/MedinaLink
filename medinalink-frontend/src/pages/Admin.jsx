@@ -6,6 +6,15 @@ import Navbar from '../components/Navbar';
 import Toast from '../components/Toast';
 import { useToast } from '../hooks/useToast';
 
+const CATEGORIES = [
+  { value: 'ROAD',       label: '🚧 Routes / Voirie'    },
+  { value: 'LIGHTING',   label: '💡 Éclairage public'   },
+  { value: 'WATER',      label: '💧 Eau / Fuites'       },
+  { value: 'WASTE',      label: '🗑️ Déchets / Propreté' },
+  { value: 'GREENSPACE', label: '🌳 Espaces verts'      },
+  { value: 'OTHER',      label: '📌 Autres'             },
+];
+
 const ROLE_BADGE = {
   CITIZEN: { cls: 'badge-resolved', label: 'Citoyen'          },
   AGENT:   { cls: 'badge-progress', label: 'Agent'            },
@@ -24,7 +33,8 @@ export default function Admin() {
   const [agentEmail,   setAgentEmail]   = useState('');
   const [agentPass,    setAgentPass]    = useState('');
   const [agentRole,    setAgentRole]    = useState('AGENT');
-  const [agentSecteur, setAgentSecteur] = useState('');
+  const [agentSecteur,     setAgentSecteur]     = useState('');
+  const [agentCategories,  setAgentCategories]  = useState([]);
 
   // Password reset modal
   const [pwModal,      setPwModal]      = useState(null); // { userId, name }
@@ -53,13 +63,16 @@ export default function Admin() {
     try {
       const payload = {
         fullName: agentName, email: agentEmail, password: agentPass, role: agentRole,
-        ...(agentRole === 'AGENT' && { secteur: agentSecteur || undefined }),
+        ...(agentRole === 'AGENT' && {
+          secteur:    agentSecteur    || undefined,
+          categories: agentCategories.length ? agentCategories.join(',') : undefined,
+        }),
       };
       await api.post('/users/create-user', payload);
       const label = agentRole === 'ADMIN' ? 'administrateur' : 'agent municipal';
       toast(`Compte ${label} créé avec succès !`, 'success');
       setAgentName(''); setAgentEmail(''); setAgentPass('');
-      setAgentRole('AGENT'); setAgentSecteur('');
+      setAgentRole('AGENT'); setAgentSecteur(''); setAgentCategories([]);
       setShowForm(false);
       fetchUsers();
     } catch (err) {
@@ -202,13 +215,41 @@ export default function Admin() {
               {/* Agent-specific fields */}
               {agentRole === 'AGENT' && (
                 <div style={{ borderTop:'1px solid var(--border-subtle)', paddingTop:'0.75rem', marginBottom:'1rem' }}>
-                  <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', marginBottom:'0.75rem' }}>
-                    🏙 Ville / secteur — les signalements de cette ville seront automatiquement assignés à cet agent
-                  </p>
-                  <div className="form-group" style={{ maxWidth:280 }}>
-                    <label className="form-label">Ville / Secteur</label>
-                    <input type="text" value={agentSecteur} onChange={e => setAgentSecteur(e.target.value)}
-                      placeholder="Ex: Casablanca, Rabat, Marrakech…" className="form-input" />
+                  <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:'1.25rem', alignItems:'start' }}>
+
+                    {/* Ville */}
+                    <div className="form-group">
+                      <label className="form-label">🏙 Ville / Secteur</label>
+                      <input type="text" value={agentSecteur} onChange={e => setAgentSecteur(e.target.value)}
+                        placeholder="Ex: Casablanca, Rabat…" className="form-input" />
+                      <span style={{ fontSize:'0.72rem', color:'var(--text-muted)', marginTop:'0.25rem', display:'block' }}>
+                        Les signalements de cette ville seront auto-assignés
+                      </span>
+                    </div>
+
+                    {/* Catégories */}
+                    <div className="form-group">
+                      <label className="form-label">📋 Catégories responsables</label>
+                      <span style={{ fontSize:'0.72rem', color:'var(--text-muted)', display:'block', marginBottom:'0.5rem' }}>
+                        Laisser vide = toutes les catégories
+                      </span>
+                      <div style={{ display:'flex', flexDirection:'column', gap:'0.35rem' }}>
+                        {CATEGORIES.map(cat => (
+                          <label key={cat.value} style={{ display:'flex', alignItems:'center', gap:'0.5rem', cursor:'pointer', fontSize:'0.83rem', color:'var(--text-warm)' }}>
+                            <input
+                              type="checkbox"
+                              checked={agentCategories.includes(cat.value)}
+                              onChange={e => setAgentCategories(prev =>
+                                e.target.checked ? [...prev, cat.value] : prev.filter(c => c !== cat.value)
+                              )}
+                              style={{ accentColor:'var(--accent)', width:15, height:15 }}
+                            />
+                            {cat.label}
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
                   </div>
                 </div>
               )}

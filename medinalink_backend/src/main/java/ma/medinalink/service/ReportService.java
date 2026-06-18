@@ -156,22 +156,48 @@ public class ReportService {
         return toResponse(saved);
     }
 
+    // Vérifie si un agent gère une catégorie donnée
+    // Un agent sans catégorie configurée gère tout
+    private boolean agentHandlesCategory(User agent, String category) {
+        String cats = agent.getAgentCategories();
+        if (cats == null || cats.isBlank()) return true;
+        if (category == null) return true;
+        for (String c : cats.split(",")) {
+            if (c.trim().equalsIgnoreCase(category)) return true;
+        }
+        return false;
+    }
+
     private void assignNearestAgent(Report report) {
         try {
             List<User> allAgents = userRepository.findAllAgents();
             if (allAgents.isEmpty()) return;
 
-            // 1. Détecter la ville du signalement via bounding box GPS
-            List<User> candidates = allAgents;
-            String city = detectCity(report.getLatitude(), report.getLongitude());
-            if (city != null) {
-                List<User> cityAgents = allAgents.stream()
-                    .filter(a -> normalize(a.getSecteur()).equals(city))
+            String city     = detectCity(report.getLatitude(), report.getLongitude());
+            String category = report.getCategory();
+
+            // Priorité 1 : même ville + même catégorie
+            List<User> cityAgents = city != null
+                ? allAgents.stream().filter(a -> normalize(a.getSecteur()).equals(city)).collect(Collectors.toList())
+                : List.of();
+
+            List<User> candidates;
+            if (!cityAgents.isEmpty()) {
+                List<User> specialized = cityAgents.stream()
+                    .filter(a -> agentHandlesCategory(a, category))
                     .collect(Collectors.toList());
-                if (!cityAgents.isEmpty()) candidates = cityAgents;
+                // Priorité 2 : même ville, catégorie non restreinte
+                candidates = specialized.isEmpty() ? cityAgents : specialized;
+            } else {
+                // Priorité 3 : même catégorie toutes villes
+                List<User> catAgents = allAgents.stream()
+                    .filter(a -> agentHandlesCategory(a, category))
+                    .collect(Collectors.toList());
+                // Priorité 4 : n'importe quel agent
+                candidates = catAgents.isEmpty() ? allAgents : catAgents;
             }
 
-            // 2. Parmi les candidats, choisir le premier (ou le plus proche si GPS dispo)
+            // Parmi les candidats, prendre le premier (ou le plus proche GPS)
             User chosen = candidates.get(0);
             double minDist = Double.MAX_VALUE;
             for (User agent : candidates) {
@@ -187,7 +213,7 @@ public class ReportService {
             reportRepository.update(report);
 
             System.out.println("[ReportService] Assigné à : " + chosen.getFullName()
-                + " (ville=" + city + ", secteur=" + chosen.getSecteur() + ")");
+                + " (ville=" + city + ", catégorie=" + category + ")");
         } catch (Exception e) {
             System.err.println("[ReportService] Auto-assignation échouée : " + e.getMessage());
         }
@@ -319,12 +345,29 @@ public class ReportService {
         String cityKey = normalize(agent.getSecteur());
         double[] bounds = CITY_BOUNDS.get(cityKey);
 
-        List<Report> pending;
+        String cats = agent.getAgentCategories();
+        String[] categories = (cats != null && !cats.isBlank()) ? cats.split(",") : null;
+
+        List<Report> pending = new java.util.ArrayList<>();
+
         if (bounds != null) {
-            // Ville reconnue : utiliser le bounding box exact de la ville
-            pending = reportRepository.findPendingInBounds(bounds[0], bounds[1], bounds[2], bounds[3]);
+            if (categories != null) {
+                // Ville connue + catégories spécifiques
+                for (String cat : categories) {
+                    pending.addAll(reportRepository.findPendingInBoundsAndCategory(
+                        bounds[0], bounds[1], bounds[2], bounds[3], cat.trim()));
+                }
+            } else {
+                // Ville connue, toutes catégories
+                pending = reportRepository.findPendingInBounds(bounds[0], bounds[1], bounds[2], bounds[3]);
+            }
+        } else if (categories != null) {
+            // Ville inconnue mais catégories spécifiques
+            for (String cat : categories) {
+                pending.addAll(reportRepository.findPendingByCategory(cat.trim()));
+            }
         } else {
-            // Ville inconnue : fallback texte sur l'adresse
+            // Fallback texte
             pending = reportRepository.findPendingBySectorText(agent.getSecteur());
         }
 
@@ -335,7 +378,7 @@ public class ReportService {
             reportRepository.update(report);
         }
         System.out.println("[ReportService] " + pending.size() + " signalement(s) PENDING assigné(s) à "
-            + agent.getFullName() + " (secteur=" + agent.getSecteur() + ")");
+            + agent.getFullName() + " (secteur=" + agent.getSecteur() + ", catégories=" + cats + ")");
         return pending.size();
     }
 
