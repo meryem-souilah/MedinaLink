@@ -190,20 +190,19 @@ public class ReportRepository {
     }
 
     // -------------------------------------------------------
-    // Signalements PENDING dans une zone GPS (bounding box rapide)
-    // Le filtre haversine exact est fait côté service
+    // Signalements PENDING dans un bounding box exact
     // -------------------------------------------------------
-    public List<Report> findPendingInBoundingBox(double lat, double lng, double radiusDegrees) {
+    public List<Report> findPendingInBounds(double latMin, double latMax, double lngMin, double lngMax) {
         return em.createQuery(
             "SELECT r FROM Report r WHERE r.status = 'PENDING' " +
             "AND r.latitude  BETWEEN :latMin AND :latMax " +
             "AND r.longitude BETWEEN :lngMin AND :lngMax",
             Report.class
         )
-        .setParameter("latMin", lat - radiusDegrees)
-        .setParameter("latMax", lat + radiusDegrees)
-        .setParameter("lngMin", lng - radiusDegrees)
-        .setParameter("lngMax", lng + radiusDegrees)
+        .setParameter("latMin", latMin)
+        .setParameter("latMax", latMax)
+        .setParameter("lngMin", lngMin)
+        .setParameter("lngMax", lngMax)
         .getResultList();
     }
 

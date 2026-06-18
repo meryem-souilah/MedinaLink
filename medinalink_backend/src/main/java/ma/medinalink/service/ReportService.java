@@ -19,12 +19,72 @@ import ma.medinalink.repository.ReportStatusHistoryRepository;
 import ma.medinalink.repository.UserRepository;
 import ma.medinalink.resource.NotificationEndpoint;
 
+import java.text.Normalizer;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
 @ApplicationScoped
 public class ReportService {
+
+    // Bounding boxes des villes marocaines : [latMin, latMax, lngMin, lngMax]
+    // Noms normalisés (sans accents, minuscules) — la detection utilise normalize()
+    private static final Map<String, double[]> CITY_BOUNDS = new HashMap<>();
+    static {
+        CITY_BOUNDS.put("casablanca",  new double[]{33.40, 33.73, -7.72, -7.36});
+        CITY_BOUNDS.put("rabat",       new double[]{33.90, 34.10, -6.95, -6.72});
+        CITY_BOUNDS.put("sale",        new double[]{33.98, 34.10, -6.87, -6.72});
+        CITY_BOUNDS.put("marrakech",   new double[]{31.55, 31.73, -8.12, -7.90});
+        CITY_BOUNDS.put("fes",         new double[]{33.95, 34.15, -5.12, -4.90});
+        CITY_BOUNDS.put("tanger",      new double[]{35.65, 35.86, -5.92, -5.68});
+        CITY_BOUNDS.put("agadir",      new double[]{30.35, 30.50, -9.68, -9.50});
+        CITY_BOUNDS.put("meknes",      new double[]{33.82, 33.96, -5.65, -5.48});
+        CITY_BOUNDS.put("oujda",       new double[]{34.62, 34.75, -1.98, -1.82});
+        CITY_BOUNDS.put("kenitra",     new double[]{34.22, 34.40, -6.70, -6.55});
+        CITY_BOUNDS.put("tetouan",     new double[]{35.52, 35.63, -5.40, -5.25});
+        CITY_BOUNDS.put("mohammedia", new double[]{33.62, 33.75, -7.42, -7.28});
+        CITY_BOUNDS.put("el jadida",   new double[]{33.18, 33.30, -8.58, -8.45});
+        CITY_BOUNDS.put("safi",        new double[]{32.22, 32.38, -9.32, -9.18});
+        CITY_BOUNDS.put("beni mellal", new double[]{32.28, 32.48, -6.45, -6.28});
+        CITY_BOUNDS.put("nador",       new double[]{35.12, 35.23, -3.02, -2.88});
+        CITY_BOUNDS.put("khouribga",   new double[]{32.82, 32.96, -6.95, -6.85});
+        CITY_BOUNDS.put("settat",      new double[]{32.95, 33.12, -7.75, -7.58});
+        CITY_BOUNDS.put("berrechid",   new double[]{33.22, 33.32, -7.62, -7.48});
+        CITY_BOUNDS.put("laayoune",    new double[]{27.02, 27.20, -13.30, -12.98});
+        CITY_BOUNDS.put("dakhla",      new double[]{23.58, 23.78, -16.02, -15.88});
+        CITY_BOUNDS.put("errachidia",  new double[]{31.88, 32.02, -4.55, -4.38});
+        CITY_BOUNDS.put("ouarzazate",  new double[]{30.88, 30.98, -6.98, -6.82});
+        CITY_BOUNDS.put("essaouira",   new double[]{31.48, 31.55, -9.82, -9.72});
+        CITY_BOUNDS.put("chefchaouen", new double[]{35.12, 35.22, -5.32, -5.18});
+        CITY_BOUNDS.put("tiznit",      new double[]{29.68, 29.80, -9.78, -9.65});
+        CITY_BOUNDS.put("taroudant",   new double[]{30.45, 30.58, -8.95, -8.80});
+        CITY_BOUNDS.put("al hoceima",  new double[]{35.22, 35.32, -4.02, -3.88});
+        CITY_BOUNDS.put("guelmim",     new double[]{28.92, 29.05, -10.18, -9.98});
+        CITY_BOUNDS.put("tan tan",     new double[]{28.42, 28.52, -11.18, -10.98});
+        CITY_BOUNDS.put("zagora",      new double[]{30.28, 30.40, -6.02, -5.88});
+        CITY_BOUNDS.put("ifrane",      new double[]{33.48, 33.58, -5.18, -5.05});
+        CITY_BOUNDS.put("azrou",       new double[]{33.42, 33.52, -5.30, -5.18});
+        CITY_BOUNDS.put("tinghir",     new double[]{31.48, 31.60, -5.60, -5.48});
+    }
+
+    // Normalise un nom de ville : retire accents, minuscules, trim
+    private static String normalize(String s) {
+        if (s == null) return "";
+        return Normalizer.normalize(s, Normalizer.Form.NFD)
+            .replaceAll("\\p{M}", "")
+            .toLowerCase().trim();
+    }
+
+    // Retourne la clé normalisée de la ville si le GPS tombe dans son bounding box
+    private String detectCity(double lat, double lng) {
+        for (Map.Entry<String, double[]> e : CITY_BOUNDS.entrySet()) {
+            double[] b = e.getValue();
+            if (lat >= b[0] && lat <= b[1] && lng >= b[2] && lng <= b[3]) return e.getKey();
+        }
+        return null;
+    }
 
     @Inject
     private ReportRepository reportRepository;
@@ -101,40 +161,33 @@ public class ReportService {
             List<User> allAgents = userRepository.findAllAgents();
             if (allAgents.isEmpty()) return;
 
-            // 1. Priorité : agents dont le secteur correspond à l'adresse du signalement
+            // 1. Détecter la ville du signalement via bounding box GPS
             List<User> candidates = allAgents;
-            String address = report.getAddress();
-            if (address != null && !address.isBlank()) {
-                String addrLower = address.toLowerCase();
-                List<User> sectorMatches = allAgents.stream()
-                    .filter(a -> a.getSecteur() != null && !a.getSecteur().isBlank()
-                              && addrLower.contains(a.getSecteur().toLowerCase()))
+            String city = detectCity(report.getLatitude(), report.getLongitude());
+            if (city != null) {
+                List<User> cityAgents = allAgents.stream()
+                    .filter(a -> normalize(a.getSecteur()).equals(city))
                     .collect(Collectors.toList());
-                if (!sectorMatches.isEmpty()) {
-                    candidates = sectorMatches;
-                }
+                if (!cityAgents.isEmpty()) candidates = cityAgents;
             }
 
-            // 2. Parmi les candidats, choisir le plus proche par GPS
-            User nearest = null;
+            // 2. Parmi les candidats, choisir le premier (ou le plus proche si GPS dispo)
+            User chosen = candidates.get(0);
             double minDist = Double.MAX_VALUE;
             for (User agent : candidates) {
                 if (agent.getAgentLatitude() == null || agent.getAgentLongitude() == null) continue;
                 double dist = haversine(report.getLatitude(), report.getLongitude(),
                                        agent.getAgentLatitude(), agent.getAgentLongitude());
-                if (dist < minDist) { minDist = dist; nearest = agent; }
+                if (dist < minDist) { minDist = dist; chosen = agent; }
             }
 
-            // 3. Fallback : aucun candidat n'a de coords GPS → premier de la liste
-            if (nearest == null) nearest = candidates.get(0);
-
-            report.setAssignedAgentId(nearest.getId());
-            report.setAssignedAgentName(nearest.getFullName());
-            report.setSecteur(nearest.getSecteur());
+            report.setAssignedAgentId(chosen.getId());
+            report.setAssignedAgentName(chosen.getFullName());
+            report.setSecteur(chosen.getSecteur());
             reportRepository.update(report);
 
-            System.out.println("[ReportService] Assigné à : " + nearest.getFullName()
-                + " (secteur=" + nearest.getSecteur() + ", dist=" + (int) minDist + "m)");
+            System.out.println("[ReportService] Assigné à : " + chosen.getFullName()
+                + " (ville=" + city + ", secteur=" + chosen.getSecteur() + ")");
         } catch (Exception e) {
             System.err.println("[ReportService] Auto-assignation échouée : " + e.getMessage());
         }
@@ -261,26 +314,18 @@ public class ReportService {
     }
 
     public int assignPendingReportsToAgent(User agent) {
-        List<Report> pending;
+        if (agent.getSecteur() == null || agent.getSecteur().isBlank()) return 0;
 
-        if (agent.getAgentLatitude() != null && agent.getAgentLongitude() != null) {
-            // GPS disponible : chercher tous les PENDING dans un rayon de 50 km
-            final double RADIUS_METERS = 50_000;
-            double radiusDeg = RADIUS_METERS / 111_000.0;
-            List<Report> box = reportRepository.findPendingInBoundingBox(
-                agent.getAgentLatitude(), agent.getAgentLongitude(), radiusDeg
-            );
-            // Filtre haversine exact pour exclure les coins du bounding box
-            pending = box.stream()
-                .filter(r -> r.getLatitude() != null && r.getLongitude() != null
-                    && haversine(agent.getAgentLatitude(), agent.getAgentLongitude(),
-                                 r.getLatitude(), r.getLongitude()) <= RADIUS_METERS)
-                .collect(Collectors.toList());
-        } else if (agent.getSecteur() != null && !agent.getSecteur().isBlank()) {
-            // Fallback textuel : adresse contient le nom du secteur
-            pending = reportRepository.findPendingBySectorText(agent.getSecteur());
+        String cityKey = normalize(agent.getSecteur());
+        double[] bounds = CITY_BOUNDS.get(cityKey);
+
+        List<Report> pending;
+        if (bounds != null) {
+            // Ville reconnue : utiliser le bounding box exact de la ville
+            pending = reportRepository.findPendingInBounds(bounds[0], bounds[1], bounds[2], bounds[3]);
         } else {
-            return 0;
+            // Ville inconnue : fallback texte sur l'adresse
+            pending = reportRepository.findPendingBySectorText(agent.getSecteur());
         }
 
         for (Report report : pending) {

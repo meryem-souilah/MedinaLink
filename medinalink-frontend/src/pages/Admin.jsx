@@ -25,9 +25,6 @@ export default function Admin() {
   const [agentPass,    setAgentPass]    = useState('');
   const [agentRole,    setAgentRole]    = useState('AGENT');
   const [agentSecteur, setAgentSecteur] = useState('');
-  const [agentLat,     setAgentLat]     = useState('');
-  const [agentLng,     setAgentLng]     = useState('');
-  const [geoLoading,   setGeoLoading]   = useState(false);
 
   // Password reset modal
   const [pwModal,      setPwModal]      = useState(null); // { userId, name }
@@ -49,24 +46,6 @@ export default function Admin() {
     finally { setLoading(false); }
   };
 
-  const getAgentLocation = () => {
-    if (!navigator.geolocation) { toast('Géolocalisation non supportée par ce navigateur', 'error'); return; }
-    setGeoLoading(true);
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setAgentLat(pos.coords.latitude.toFixed(6));
-        setAgentLng(pos.coords.longitude.toFixed(6));
-        setGeoLoading(false);
-        toast('Position GPS détectée avec succès', 'success');
-      },
-      () => {
-        setGeoLoading(false);
-        toast('Impossible de récupérer la position GPS', 'error');
-      },
-      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-    );
-  };
-
   const createAgent = async (e) => {
     e.preventDefault();
     if (agentPass.length < 6) { toast('Mot de passe trop court (min 6 caractères)', 'error'); return; }
@@ -74,17 +53,13 @@ export default function Admin() {
     try {
       const payload = {
         fullName: agentName, email: agentEmail, password: agentPass, role: agentRole,
-        ...(agentRole === 'AGENT' && {
-          secteur:        agentSecteur || undefined,
-          agentLatitude:  agentLat ? parseFloat(agentLat) : undefined,
-          agentLongitude: agentLng ? parseFloat(agentLng) : undefined,
-        }),
+        ...(agentRole === 'AGENT' && { secteur: agentSecteur || undefined }),
       };
       await api.post('/users/create-user', payload);
       const label = agentRole === 'ADMIN' ? 'administrateur' : 'agent municipal';
       toast(`Compte ${label} créé avec succès !`, 'success');
       setAgentName(''); setAgentEmail(''); setAgentPass('');
-      setAgentRole('AGENT'); setAgentSecteur(''); setAgentLat(''); setAgentLng('');
+      setAgentRole('AGENT'); setAgentSecteur('');
       setShowForm(false);
       fetchUsers();
     } catch (err) {
@@ -226,42 +201,16 @@ export default function Admin() {
 
               {/* Agent-specific fields */}
               {agentRole === 'AGENT' && (
-                <>
-                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'0.5rem', borderTop:'1px solid var(--border-subtle)', paddingTop:'0.75rem', marginBottom:'0.75rem' }}>
-                    <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', margin:0 }}>
-                      📍 Informations de zone (optionnel — utilisées pour l'auto-assignation des signalements)
-                    </p>
-                    <button
-                      type="button"
-                      onClick={getAgentLocation}
-                      disabled={geoLoading}
-                      className="btn btn-ghost btn-sm"
-                      style={{ fontSize:'0.78rem', display:'flex', alignItems:'center', gap:'0.35rem', whiteSpace:'nowrap' }}
-                    >
-                      {geoLoading
-                        ? <><span style={{ width:12, height:12, border:'2px solid var(--text-muted)', borderTopColor:'var(--accent)', borderRadius:'50%', animation:'spin 0.7s linear infinite', display:'inline-block' }} /> Localisation…</>
-                        : '📍 Utiliser ma position'
-                      }
-                    </button>
+                <div style={{ borderTop:'1px solid var(--border-subtle)', paddingTop:'0.75rem', marginBottom:'1rem' }}>
+                  <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', marginBottom:'0.75rem' }}>
+                    🏙 Ville / secteur — les signalements de cette ville seront automatiquement assignés à cet agent
+                  </p>
+                  <div className="form-group" style={{ maxWidth:280 }}>
+                    <label className="form-label">Ville / Secteur</label>
+                    <input type="text" value={agentSecteur} onChange={e => setAgentSecteur(e.target.value)}
+                      placeholder="Ex: Casablanca, Rabat, Marrakech…" className="form-input" />
                   </div>
-                  <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px,1fr))', gap:'1rem', marginBottom:'1rem' }}>
-                    <div className="form-group">
-                      <label className="form-label">Secteur</label>
-                      <input type="text" value={agentSecteur} onChange={e => setAgentSecteur(e.target.value)}
-                        placeholder="Ex: Centre-Ville" className="form-input" />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Latitude GPS</label>
-                      <input type="number" step="any" value={agentLat} onChange={e => setAgentLat(e.target.value)}
-                        placeholder="Ex: 33.5731" className="form-input" />
-                    </div>
-                    <div className="form-group">
-                      <label className="form-label">Longitude GPS</label>
-                      <input type="number" step="any" value={agentLng} onChange={e => setAgentLng(e.target.value)}
-                        placeholder="Ex: -7.5898" className="form-input" />
-                    </div>
-                  </div>
-                </>
+                </div>
               )}
 
               <div style={{ display:'flex', justifyContent:'flex-end', gap:'0.5rem' }}>
