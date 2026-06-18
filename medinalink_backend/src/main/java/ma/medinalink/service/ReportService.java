@@ -243,6 +243,17 @@ public class ReportService {
         return toResponse(updated);
     }
 
+    public ReportResponse assignToAgent(UUID reportId, UUID agentId) {
+        Report report = reportRepository.findById(reportId)
+            .orElseThrow(() -> new NotFoundException("Signalement non trouvé"));
+        User agent = userRepository.findById(agentId)
+            .orElseThrow(() -> new NotFoundException("Agent non trouvé"));
+        report.setAssignedAgentId(agent.getId());
+        report.setAssignedAgentName(agent.getFullName());
+        report.setSecteur(agent.getSecteur());
+        return toResponse(reportRepository.update(report));
+    }
+
     private ReportResponse toResponse(Report report) {
         String userFullName = report.getUser() != null ? report.getUser().getFullName() : "Anonyme";
 

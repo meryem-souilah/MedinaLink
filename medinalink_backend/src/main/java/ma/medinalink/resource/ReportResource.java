@@ -193,6 +193,27 @@ public class ReportResource {
         }
     }
 
+    // -------------------------------------------------------
+    // PUT /api/v1/reports/{id}/assign
+    // Body : { "agentId": "uuid" }
+    // -------------------------------------------------------
+    @PUT
+    @Path("/{id}/assign")
+    @Secured
+    public Response assignToAgent(@PathParam("id") UUID id, Map<String, String> body) {
+        try {
+            String raw = body.get("agentId");
+            if (raw == null || raw.isBlank())
+                return Response.status(400).entity(Map.of("message", "agentId requis")).build();
+            var report = reportService.assignToAgent(id, UUID.fromString(raw));
+            return Response.ok(report).build();
+        } catch (NotFoundException e) {
+            return Response.status(404).entity(Map.of("message", e.getMessage())).build();
+        } catch (Exception e) {
+            return Response.status(500).entity(Map.of("message", e.getMessage())).build();
+        }
+    }
+
     private UUID getUserIdFromHeader(HttpHeaders headers) {
         String authHeader = headers.getHeaderString(HttpHeaders.AUTHORIZATION);
         String token = authHeader.substring(7);

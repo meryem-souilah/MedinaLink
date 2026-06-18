@@ -69,6 +69,7 @@ export default function Dashboard() {
   const [filterDateTo,   setFilterDateTo]   = useState('');
   const [sortBy,         setSortBy]         = useState('date');
   const [searchQuery,    setSearchQuery]    = useState('');
+  const [filterUrgent,   setFilterUrgent]   = useState(false);
   const [zoneOnly,       setZoneOnly]       = useState(true);
 
   // Bulk actions
@@ -84,17 +85,31 @@ export default function Dashboard() {
   const [agentLoading,  setAgentLoading]  = useState(false);
   const agentBottomRef = useRef(null);
 
-  // Details modal (notes + history + priority)
-  const [detailsModal,        setDetailsModal]        = useState(null);
-  const [detailsTab,          setDetailsTab]          = useState('notes');
-  const [notesValue,          setNotesValue]          = useState('');
-  const [savingNotes,         setSavingNotes]         = useState(false);
-  const [statusHistory,       setStatusHistory]       = useState([]);
-  const [historyLoading,      setHistoryLoading]      = useState(false);
-  const [priorities,          setPriorities]          = useState([]);
-  const [prioritiesLoading,   setPrioritiesLoading]   = useState(false);
-  const [selectedPriorityId,  setSelectedPriorityId]  = useState('');
-  const [linkingPriority,     setLinkingPriority]     = useState(false);
+  // Details modal
+  const [detailsModal,       setDetailsModal]       = useState(null);
+  const [detailsTab,         setDetailsTab]         = useState('notes');
+  const [notesValue,         setNotesValue]         = useState('');
+  const [savingNotes,        setSavingNotes]        = useState(false);
+  const [statusHistory,      setStatusHistory]      = useState([]);
+  const [historyLoading,     setHistoryLoading]     = useState(false);
+  const [priorities,         setPriorities]         = useState([]);
+  const [prioritiesLoading,  setPrioritiesLoading]  = useState(false);
+  const [selectedPriorityId, setSelectedPriorityId] = useState('');
+  const [linkingPriority,    setLinkingPriority]    = useState(false);
+
+  // Reassign tab
+  const [agents,          setAgents]          = useState([]);
+  const [agentsLoading,   setAgentsLoading]   = useState(false);
+  const [selectedAgentId, setSelectedAgentId] = useState('');
+  const [reassigning,     setReassigning]     = useState(false);
+
+  // Reject with reason modal
+  const [rejectModal,  setRejectModal]  = useState(null);
+  const [rejectReason, setRejectReason] = useState('');
+  const [rejecting,    setRejecting]    = useState(false);
+
+  // Personal stats (AGENT)
+  const [myStats, setMyStats] = useState(null);
 
   const { user }          = useAuth();
   const navigate          = useNavigate();
@@ -104,6 +119,15 @@ export default function Dashboard() {
     if (user?.role === 'CITIZEN') { navigate('/citizen/reports'); return; }
     fetchReports(zoneOnly);
   }, [zoneOnly]);
+
+  // Load personal stats for agents
+  useEffect(() => {
+    if (user?.role === 'AGENT' && user?.userId) {
+      api.get(`/reports/stats?agentId=${user.userId}`)
+        .then(res => setMyStats(res.data))
+        .catch(() => {});
+    }
+  }, [user]);
 
   useEffect(() => {
     agentBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -115,11 +139,8 @@ export default function Dashboard() {
       const agentParam = (myZone && user?.role === 'AGENT') ? `&agentId=${user.userId}` : '';
       const res = await api.get(`/reports?page=0&size=200${agentParam}`);
       setReports(res.data);
-    } catch (err) {
-      console.error(err);
-    } finally {
-      setLoading(false);
-    }
+    } catch { toast('Impossible de charger les signalements', 'error'); }
+    finally { setLoading(false); }
   };
 
   /* ── Computed ── */
@@ -134,12 +155,23 @@ export default function Dashboard() {
     };
   }, [reports]);
 
+  const urgentCount = useMemo(() =>
+    reports.filter(r => {
+      const age = (Date.now() - new Date((r.createdAt||'') + 'Z')) / 86400000;
+      return age > 3 && (r.status === 'PENDING' || r.status === 'IN_PROGRESS');
+    }).length
+  , [reports]);
+
   const filteredReports = useMemo(() => {
     let r = reports.filter(rep => {
       if (filterStatus   && rep.status   !== filterStatus)   return false;
       if (filterCategory && rep.category !== filterCategory) return false;
       if (filterDateFrom && rep.createdAt && rep.createdAt.slice(0,10) < filterDateFrom) return false;
       if (filterDateTo   && rep.createdAt && rep.createdAt.slice(0,10) > filterDateTo)   return false;
+      if (filterUrgent) {
+        const age = (Date.now() - new Date((rep.createdAt||'') + 'Z')) / 86400000;
+        if (age <= 3 || rep.status === 'RESOLVED' || rep.status === 'REJECTED') return false;
+      }
       if (searchQuery) {
         const q = searchQuery.toLowerCase();
         if (
@@ -154,8 +186,9 @@ export default function Dashboard() {
     });
     if (sortBy === 'votes') return [...r].sort((a,b) => (b.upvotes||0)-(a.upvotes||0));
     if (sortBy === 'age')   return [...r].sort((a,b) => new Date(a.createdAt)-new Date(b.createdAt));
+    if (sortBy === 'urgent') return [...r].sort((a,b) => new Date(a.createdAt)-new Date(b.createdAt));
     return [...r].sort((a,b) => new Date(b.createdAt)-new Date(a.createdAt));
-  }, [reports, filterStatus, filterCategory, filterDateFrom, filterDateTo, sortBy]);
+  }, [reports, filterStatus, filterCategory, filterDateFrom, filterDateTo, filterUrgent, searchQuery, sortBy]);
 
   const catData = useMemo(() => {
     const counts = {};
@@ -184,6 +217,27 @@ export default function Dashboard() {
       fetchReports(zoneOnly);
     } catch { toast('Erreur lors de la mise à jour', 'error'); }
     finally { setUpdatingId(null); }
+  };
+
+  const openRejectModal = (report) => {
+    setRejectModal(report);
+    setRejectReason(report.agentNotes || '');
+  };
+
+  const confirmReject = async () => {
+    if (!rejectModal) return;
+    setRejecting(true);
+    try {
+      if (rejectReason.trim()) {
+        await api.put(`/reports/${rejectModal.id}/notes`, { notes: rejectReason });
+      }
+      await api.put(`/reports/${rejectModal.id}/status`, { status: 'REJECTED' });
+      toast('Signalement rejeté', 'warning');
+      fetchReports(zoneOnly);
+      setRejectModal(null);
+      setRejectReason('');
+    } catch { toast('Erreur lors du rejet', 'error'); }
+    finally { setRejecting(false); }
   };
 
   const handleBulkUpdate = async () => {
@@ -232,9 +286,10 @@ export default function Dashboard() {
 
   const handleAgentKey = (e) => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendAgentMessage(); } };
 
-  const openDetails = async (report) => {
+  const openDetails = (report) => {
     setDetailsModal(report); setDetailsTab('notes'); setNotesValue(report.agentNotes||'');
     setStatusHistory([]); setPriorities([]); setSelectedPriorityId(report.priorityId||'');
+    setAgents([]); setSelectedAgentId('');
   };
 
   const handleTabChange = async (tab) => {
@@ -250,6 +305,12 @@ export default function Dashboard() {
       try { const r = await api.get('/priorities?page=0&size=100'); setPriorities(r.data); }
       catch { setPriorities([]); }
       finally { setPrioritiesLoading(false); }
+    }
+    if (tab === 'reassign' && agents.length === 0) {
+      setAgentsLoading(true);
+      try { const r = await api.get('/users/agents'); setAgents(r.data); }
+      catch { setAgents([]); }
+      finally { setAgentsLoading(false); }
     }
   };
 
@@ -276,6 +337,27 @@ export default function Dashboard() {
       toast('Priorité liée avec succès', 'success');
     } catch { toast('Erreur lors de la liaison avec la priorité', 'error'); }
     finally { setLinkingPriority(false); }
+  };
+
+  const saveReassignment = async () => {
+    if (!detailsModal || !selectedAgentId) return;
+    setReassigning(true);
+    try {
+      const res = await api.put(`/reports/${detailsModal.id}/assign`, { agentId: selectedAgentId });
+      const upd = res.data;
+      setReports(prev => prev.map(r => r.id===detailsModal.id
+        ? {...r, assignedAgentId:upd.assignedAgentId, assignedAgentName:upd.assignedAgentName, secteur:upd.secteur}
+        : r));
+      setDetailsModal(prev => ({...prev, assignedAgentId:upd.assignedAgentId, assignedAgentName:upd.assignedAgentName, secteur:upd.secteur}));
+      toast('Signalement réassigné avec succès', 'success');
+      setSelectedAgentId('');
+    } catch { toast('Erreur lors de la réassignation', 'error'); }
+    finally { setReassigning(false); }
+  };
+
+  const navigateToLocation = (report) => {
+    if (!report.latitude || !report.longitude) return;
+    window.open(`https://maps.google.com/?q=${report.latitude},${report.longitude}`, '_blank');
   };
 
   /* ── SVG gauge ── */
@@ -307,20 +389,8 @@ export default function Dashboard() {
             <div style={{ display:'flex', gap:'0.5rem', alignItems:'center', flexWrap:'wrap' }}>
               {user?.role === 'AGENT' && (
                 <div style={{ display:'flex', background:'var(--glass)', borderRadius:'var(--r-md)', padding:3, gap:3 }}>
-                  <button
-                    onClick={() => setZoneOnly(true)}
-                    className={`btn btn-sm ${zoneOnly ? 'btn-primary' : 'btn-ghost'}`}
-                    style={{ borderRadius:'var(--r-sm)' }}
-                  >
-                    📍 Ma zone
-                  </button>
-                  <button
-                    onClick={() => setZoneOnly(false)}
-                    className={`btn btn-sm ${!zoneOnly ? 'btn-primary' : 'btn-ghost'}`}
-                    style={{ borderRadius:'var(--r-sm)' }}
-                  >
-                    🌍 Tous
-                  </button>
+                  <button onClick={() => setZoneOnly(true)}  className={`btn btn-sm ${zoneOnly  ? 'btn-primary' : 'btn-ghost'}`} style={{ borderRadius:'var(--r-sm)' }}>📍 Ma zone</button>
+                  <button onClick={() => setZoneOnly(false)} className={`btn btn-sm ${!zoneOnly ? 'btn-primary' : 'btn-ghost'}`} style={{ borderRadius:'var(--r-sm)' }}>🌍 Tous</button>
                 </div>
               )}
               <button onClick={() => downloadCSV(filteredReports)} className="btn btn-ghost">
@@ -329,30 +399,43 @@ export default function Dashboard() {
             </div>
           </div>
 
+          {/* Personal stats widget — AGENT only */}
+          {user?.role === 'AGENT' && myStats && (
+            <div style={{
+              background:'var(--terra-dim)', border:'1px solid var(--terra-border)',
+              borderRadius:'var(--r-lg)', padding:'1rem 1.5rem', marginBottom:'1rem',
+              display:'flex', alignItems:'center', gap:'1.5rem', flexWrap:'wrap',
+            }}>
+              <p style={{ fontSize:'0.82rem', fontWeight:700, color:'var(--terra)', marginRight:'0.5rem' }}>🛠 Mes signalements</p>
+              {[
+                { label:'En attente',   value: myStats.PENDING     || 0, color:'var(--amber)' },
+                { label:'En cours',     value: myStats.IN_PROGRESS || 0, color:'var(--blue)'  },
+                { label:'Résolus',      value: myStats.RESOLVED    || 0, color:'var(--green)' },
+                { label:'Rejetés',      value: myStats.REJECTED    || 0, color:'var(--red)'   },
+              ].map(({ label, value, color }) => (
+                <div key={label} style={{ display:'flex', alignItems:'center', gap:'0.4rem' }}>
+                  <strong style={{ fontSize:'1.1rem', fontWeight:800, color }}>{value}</strong>
+                  <span style={{ fontSize:'0.75rem', color:'var(--text-muted)' }}>{label}</span>
+                </div>
+              ))}
+              {urgentCount > 0 && (
+                <div style={{ marginLeft:'auto', background:'var(--red-dim)', border:'1px solid var(--red)', borderRadius:'var(--r-full)', padding:'0.3rem 0.9rem', fontSize:'0.78rem', fontWeight:700, color:'var(--red)' }}>
+                  ⚠ {urgentCount} urgent{urgentCount > 1 ? 's' : ''}
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Stats bar */}
           <div className="stats-bar">
-            <div className="stat-cell">
-              <div className="stat-cell-value">{stats.total}</div>
-              <div className="stat-cell-label">Total</div>
-            </div>
-            <div className="stat-cell">
-              <div className="stat-cell-value" style={{ color:'var(--amber)' }}>{stats.pending}</div>
-              <div className="stat-cell-label">En attente</div>
-            </div>
-            <div className="stat-cell">
-              <div className="stat-cell-value" style={{ color:'var(--blue)' }}>{stats.inProgress}</div>
-              <div className="stat-cell-label">En cours</div>
-            </div>
-            <div className="stat-cell">
-              <div className="stat-cell-value" style={{ color:'var(--green)' }}>{stats.resolved}</div>
-              <div className="stat-cell-label">Résolus</div>
-            </div>
+            <div className="stat-cell"><div className="stat-cell-value">{stats.total}</div><div className="stat-cell-label">Total</div></div>
+            <div className="stat-cell"><div className="stat-cell-value" style={{ color:'var(--amber)' }}>{stats.pending}</div><div className="stat-cell-label">En attente</div></div>
+            <div className="stat-cell"><div className="stat-cell-value" style={{ color:'var(--blue)' }}>{stats.inProgress}</div><div className="stat-cell-label">En cours</div></div>
+            <div className="stat-cell"><div className="stat-cell-value" style={{ color:'var(--green)' }}>{stats.resolved}</div><div className="stat-cell-label">Résolus</div></div>
           </div>
 
           {/* Charts row */}
           <div className="charts-row">
-
-            {/* Category bar chart */}
             <div className="chart-cell">
               <p className="chart-title">Signalements par catégorie</p>
               {catData.length === 0 ? (
@@ -374,7 +457,6 @@ export default function Dashboard() {
               )}
             </div>
 
-            {/* Weekly trend */}
             <div className="chart-cell">
               <p className="chart-title">Tendance — 7 derniers jours</p>
               <div style={{ display:'flex', alignItems:'flex-end', gap:'0.35rem', height:80 }}>
@@ -393,17 +475,13 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Resolution gauge */}
             <div className="chart-cell" style={{ display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center' }}>
               <p className="chart-title" style={{ textAlign:'center' }}>Taux de résolution</p>
               <svg width="96" height="96" viewBox="0 0 100 100">
                 <circle cx="50" cy="50" r="40" fill="none" stroke="var(--glass-border)" strokeWidth="9" />
                 <circle cx="50" cy="50" r="40" fill="none"
-                  stroke={gaugeColor}
-                  strokeWidth="9"
-                  strokeDasharray={circumference}
-                  strokeDashoffset={dashOffset}
-                  strokeLinecap="round"
+                  stroke={gaugeColor} strokeWidth="9"
+                  strokeDasharray={circumference} strokeDashoffset={dashOffset} strokeLinecap="round"
                   style={{ transform:'rotate(-90deg)', transformOrigin:'50% 50%', transition:'stroke-dashoffset 0.8s var(--ease-out)', filter:`drop-shadow(0 0 6px ${gaugeColor})` }}
                 />
                 <text x="50" y="46" textAnchor="middle" fontSize="16" fontWeight="800" fill="var(--text-bright)">{stats.resolutionRate}%</text>
@@ -413,7 +491,6 @@ export default function Dashboard() {
                 {stats.resolved} / {stats.total} signalement(s)
               </p>
             </div>
-
           </div>
 
           {/* Filters */}
@@ -445,9 +522,16 @@ export default function Dashboard() {
               <option value="age">Plus ancien</option>
               <option value="votes">Plus de votes</option>
             </select>
-            {(searchQuery||filterStatus||filterCategory||filterDateFrom||filterDateTo) && (
+            <button
+              className={`btn btn-sm ${filterUrgent ? 'btn-danger' : 'btn-ghost'}`}
+              onClick={() => setFilterUrgent(v => !v)}
+              title="Signalements en attente depuis plus de 3 jours"
+            >
+              {filterUrgent ? '🔴' : '⚠'} Urgents {urgentCount > 0 && `(${urgentCount})`}
+            </button>
+            {(searchQuery||filterStatus||filterCategory||filterDateFrom||filterDateTo||filterUrgent) && (
               <button className="btn btn-ghost btn-sm"
-                onClick={() => { setSearchQuery(''); setFilterStatus(''); setFilterCategory(''); setFilterDateFrom(''); setFilterDateTo(''); }}>
+                onClick={() => { setSearchQuery(''); setFilterStatus(''); setFilterCategory(''); setFilterDateFrom(''); setFilterDateTo(''); setFilterUrgent(false); }}>
                 ✕ Réinitialiser
               </button>
             )}
@@ -502,10 +586,16 @@ export default function Dashboard() {
                     const sla      = getSLA(report.createdAt);
                     const isUpd    = updatingId === report.id;
                     const selected = selectedIds.has(report.id);
+                    const isUrgent = sla.cls === 'red' || sla.cls === 'orange';
                     return (
-                      <tr key={report.id} style={ selected ? { background:'var(--gold-dim)' } : {} }>
+                      <tr key={report.id} style={ selected ? { background:'var(--gold-dim)' } : isUrgent && (report.status==='PENDING'||report.status==='IN_PROGRESS') ? { borderLeft:'3px solid var(--red)' } : {} }>
                         <td><input type="checkbox" checked={selected} onChange={() => toggleSelect(report.id)} /></td>
-                        <td style={{ fontSize:'1.2rem' }}>{CAT_ICONS[report.category]||'📌'}</td>
+                        <td style={{ position:'relative' }}>
+                          <span style={{ fontSize:'1.2rem' }}>{CAT_ICONS[report.category]||'📌'}</span>
+                          {report.photoUrl && (
+                            <span title="Photo disponible" style={{ position:'absolute', bottom:4, right:4, width:8, height:8, background:'var(--green)', borderRadius:'50%', display:'block' }} />
+                          )}
+                        </td>
                         <td>
                           <span style={{ fontWeight:600, color:'var(--text-warm)', fontSize:'0.875rem' }}>{report.title}</span>
                           {report.description && (
@@ -514,18 +604,23 @@ export default function Dashboard() {
                             </p>
                           )}
                           {report.agentNotes && (
-                            <p style={{ fontSize:'0.7rem', color:'var(--gold)', margin:'2px 0 0', fontStyle:'italic' }}>Note agent</p>
+                            <p style={{ fontSize:'0.7rem', color:'var(--gold)', margin:'2px 0 0', fontStyle:'italic' }}>📝 Note agent</p>
                           )}
                         </td>
                         <td style={{ color:'var(--text-muted)', fontSize:'0.82rem', maxWidth:160, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap' }}>
                           {report.address || `${report.latitude?.toFixed(3)}, ${report.longitude?.toFixed(3)}`}
+                          {report.latitude && report.longitude && (
+                            <button
+                              onClick={() => navigateToLocation(report)}
+                              title="Naviguer vers ce lieu"
+                              style={{ marginLeft:4, background:'none', border:'none', cursor:'pointer', fontSize:'0.85rem', padding:0, verticalAlign:'middle' }}
+                            >🗺</button>
+                          )}
                         </td>
                         <td style={{ color:'var(--text-body)' }}>{report.userFullName}</td>
                         <td style={{ fontSize:'0.78rem' }}>
                           {report.secteur
-                            ? <span style={{ background:'var(--teal-dim,rgba(20,184,166,0.15))', color:'var(--teal)', borderRadius:4, padding:'2px 7px', fontWeight:600 }}>
-                                📍 {report.secteur}
-                              </span>
+                            ? <span style={{ background:'var(--teal-dim,rgba(20,184,166,0.15))', color:'var(--teal)', borderRadius:4, padding:'2px 7px', fontWeight:600 }}>📍 {report.secteur}</span>
                             : <span style={{ color:'var(--text-faint)' }}>—</span>}
                           {report.assignedAgentName && !zoneOnly && (
                             <div style={{ fontSize:'0.7rem', color:'var(--text-muted)', marginTop:2 }}>{report.assignedAgentName}</div>
@@ -547,7 +642,7 @@ export default function Dashboard() {
                               <button onClick={() => updateStatus(report.id,'RESOLVED')} disabled={isUpd} className="btn btn-success btn-sm">Résoudre</button>
                             )}
                             {(report.status==='PENDING'||report.status==='IN_PROGRESS') && (
-                              <button onClick={() => updateStatus(report.id,'REJECTED')} disabled={isUpd} className="btn btn-danger btn-sm">✕</button>
+                              <button onClick={() => openRejectModal(report)} disabled={isUpd} className="btn btn-danger btn-sm" title="Rejeter avec raison">✕</button>
                             )}
                             <button onClick={() => analyzeReport(report)} disabled={analyzingId===report.id} className="btn btn-ghost btn-sm">
                               {analyzingId===report.id ? '…' : '🤖 IA'}
@@ -575,12 +670,10 @@ export default function Dashboard() {
               <button onClick={() => setAnalysisModal(null)} className="modal-close">✕</button>
             </div>
             <div style={{ display:'flex', flex:1, minHeight:0, overflow:'hidden' }}>
-              {/* Analysis text */}
               <div style={{ flex:1, padding:'1.5rem', overflowY:'auto', borderRight:'1px solid var(--border-subtle)' }}>
                 <p style={{ fontSize:'0.7rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'0.08em', color:'var(--text-muted)', marginBottom:'0.75rem' }}>Analyse automatique</p>
                 <div className="modal-body">{renderMarkdown(analysisModal.text)}</div>
               </div>
-              {/* AI Chat */}
               <div style={{ width:340, display:'flex', flexDirection:'column', minHeight:0 }}>
                 <div style={{ padding:'0.875rem 1rem', background:'var(--gold-dim)', borderBottom:'1px solid var(--gold-border)' }}>
                   <p style={{ margin:0, fontWeight:700, fontSize:'0.875rem', color:'var(--gold)' }}>Assistant Agent Municipal</p>
@@ -618,31 +711,89 @@ export default function Dashboard() {
         </div>
       )}
 
-      <Toast toasts={toasts} />
+      {/* ── Modal Rejet avec raison ── */}
+      {rejectModal && (
+        <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setRejectModal(null)}>
+          <div className="modal" style={{ maxWidth:480 }}>
+            <div className="modal-header">
+              <h3>⚠ Rejeter ce signalement</h3>
+              <button onClick={() => setRejectModal(null)} className="modal-close">✕</button>
+            </div>
+            <p style={{ fontSize:'0.875rem', color:'var(--text-muted)', marginBottom:'1rem' }}>
+              Vous allez rejeter : <strong style={{ color:'var(--text-warm)' }}>{rejectModal.title}</strong>
+            </p>
+            <div className="form-group">
+              <label className="form-label">Raison du rejet <span style={{ color:'var(--text-faint)' }}>(sauvegardée comme note interne)</span></label>
+              <textarea
+                value={rejectReason} onChange={e => setRejectReason(e.target.value)}
+                placeholder="Ex: Doublon avec signalement #123, hors de notre juridiction, informations insuffisantes…"
+                rows={4} className="form-textarea" autoFocus
+              />
+            </div>
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:'0.5rem', marginTop:'1rem' }}>
+              <button onClick={() => setRejectModal(null)} className="btn btn-ghost">Annuler</button>
+              <button onClick={confirmReject} disabled={rejecting} className="btn btn-danger">
+                {rejecting ? 'Rejet en cours…' : '✕ Confirmer le rejet'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Modal Détails ── */}
       {detailsModal && (
         <div className="modal-overlay" onClick={e => e.target===e.currentTarget && setDetailsModal(null)}>
-          <div className="modal" style={{ maxWidth:600 }}>
+          <div className="modal" style={{ maxWidth:640 }}>
             <div className="modal-header">
-              <h3>{detailsModal.title}</h3>
+              <div>
+                <h3>{detailsModal.title}</h3>
+                <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', marginTop:'0.2rem' }}>
+                  {CAT_ICONS[detailsModal.category]} {CAT_LABELS[detailsModal.category]} · {detailsModal.userFullName}
+                  {detailsModal.address && ` · ${detailsModal.address}`}
+                </p>
+              </div>
               <button onClick={() => setDetailsModal(null)} className="modal-close">✕</button>
             </div>
 
+            {/* Navigate + info row */}
+            <div style={{ display:'flex', gap:'0.5rem', marginBottom:'0.875rem', flexWrap:'wrap' }}>
+              {detailsModal.latitude && detailsModal.longitude && (
+                <button onClick={() => navigateToLocation(detailsModal)} className="btn btn-ghost btn-sm">
+                  🗺 Naviguer ({detailsModal.latitude?.toFixed(4)}, {detailsModal.longitude?.toFixed(4)})
+                </button>
+              )}
+              {detailsModal.secteur && (
+                <span style={{ background:'var(--amber-dim)', color:'var(--amber)', borderRadius:'var(--r-full)', padding:'0.28rem 0.85rem', fontSize:'0.75rem', fontWeight:600 }}>
+                  📍 {detailsModal.secteur}
+                </span>
+              )}
+              {detailsModal.assignedAgentName && (
+                <span style={{ background:'var(--glass)', color:'var(--text-muted)', borderRadius:'var(--r-full)', padding:'0.28rem 0.85rem', fontSize:'0.75rem' }}>
+                  🛠 {detailsModal.assignedAgentName}
+                </span>
+              )}
+            </div>
+
             <div className="tabs">
-              {[['notes','Notes'],['history','Historique'],['priority','Priorité']].map(([tab,label]) => (
-                <button key={tab} className={`tab-btn${detailsTab===tab?' active':''}`} onClick={() => handleTabChange(tab)}>{label}</button>
+              {[
+                ['notes',    'Notes'],
+                ['photo',    detailsModal.photoUrl ? '📷 Photo' : 'Photo'],
+                ['history',  'Historique'],
+                ['priority', 'Priorité'],
+                ['reassign', 'Réassigner'],
+              ].map(([tab, label]) => (
+                <button key={tab} className={`tab-btn${detailsTab===tab?' active':''}`} onClick={() => handleTabChange(tab)}>
+                  {label}
+                </button>
               ))}
             </div>
 
+            {/* Tab: Notes */}
             {detailsTab === 'notes' && (
               <div style={{ display:'flex', flexDirection:'column', gap:'0.875rem' }}>
                 <p style={{ fontSize:'0.82rem', color:'var(--text-muted)' }}>Notes internes visibles uniquement par les agents et admins.</p>
-                <textarea
-                  value={notesValue} onChange={e => setNotesValue(e.target.value)}
-                  placeholder="Ajouter des notes internes sur ce signalement…" rows={6}
-                  className="form-textarea"
-                />
+                <textarea value={notesValue} onChange={e => setNotesValue(e.target.value)}
+                  placeholder="Ajouter des notes internes sur ce signalement…" rows={6} className="form-textarea" />
                 <div style={{ display:'flex', justifyContent:'flex-end', gap:'0.5rem' }}>
                   <button onClick={() => setDetailsModal(null)} className="btn btn-ghost">Fermer</button>
                   <button onClick={saveNotes} className="btn btn-primary" disabled={savingNotes}>
@@ -652,6 +803,33 @@ export default function Dashboard() {
               </div>
             )}
 
+            {/* Tab: Photo */}
+            {detailsTab === 'photo' && (
+              <div>
+                {detailsModal.photoUrl ? (
+                  <div>
+                    <img
+                      src={detailsModal.photoUrl}
+                      alt="Photo du signalement"
+                      style={{ width:'100%', maxHeight:380, objectFit:'cover', borderRadius:'var(--r-md)', border:'1px solid var(--border-vis)' }}
+                    />
+                    <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', marginTop:'0.5rem', textAlign:'center' }}>
+                      Photo soumise par le citoyen — {detailsModal.userFullName}
+                    </p>
+                  </div>
+                ) : (
+                  <div style={{ textAlign:'center', padding:'2.5rem', color:'var(--text-muted)' }}>
+                    <p style={{ fontSize:'2rem', marginBottom:'0.5rem' }}>📷</p>
+                    <p style={{ fontSize:'0.875rem' }}>Aucune photo attachée à ce signalement</p>
+                  </div>
+                )}
+                <div style={{ display:'flex', justifyContent:'flex-end', marginTop:'1rem' }}>
+                  <button onClick={() => setDetailsModal(null)} className="btn btn-ghost">Fermer</button>
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Historique */}
             {detailsTab === 'history' && (
               <div>
                 {historyLoading ? (
@@ -684,6 +862,7 @@ export default function Dashboard() {
               </div>
             )}
 
+            {/* Tab: Priorité */}
             {detailsTab === 'priority' && (
               <div style={{ display:'flex', flexDirection:'column', gap:'0.875rem' }}>
                 {detailsModal.priorityTitle && (
@@ -709,9 +888,49 @@ export default function Dashboard() {
                 </div>
               </div>
             )}
+
+            {/* Tab: Réassigner */}
+            {detailsTab === 'reassign' && (
+              <div style={{ display:'flex', flexDirection:'column', gap:'0.875rem' }}>
+                {detailsModal.assignedAgentName && (
+                  <div className="alert alert-info">
+                    🛠 Actuellement assigné à : <strong>{detailsModal.assignedAgentName}</strong>
+                    {detailsModal.secteur && ` (${detailsModal.secteur})`}
+                  </div>
+                )}
+                <div className="form-group">
+                  <label className="form-label">Choisir un nouvel agent</label>
+                  {agentsLoading ? (
+                    <p style={{ color:'var(--text-muted)', fontSize:'0.875rem' }}>Chargement des agents…</p>
+                  ) : agents.length === 0 ? (
+                    <p style={{ color:'var(--text-muted)', fontSize:'0.875rem' }}>Aucun agent disponible</p>
+                  ) : (
+                    <select className="form-select" value={selectedAgentId} onChange={e => setSelectedAgentId(e.target.value)}>
+                      <option value="">— Sélectionner un agent —</option>
+                      {agents.map(a => (
+                        <option key={a.id} value={a.id}>
+                          {a.fullName}{a.secteur ? ` — ${a.secteur}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+                <p style={{ fontSize:'0.8rem', color:'var(--text-muted)' }}>
+                  Réassigner ce signalement à un autre agent municipal. Le secteur sera mis à jour automatiquement.
+                </p>
+                <div style={{ display:'flex', justifyContent:'flex-end', gap:'0.5rem' }}>
+                  <button onClick={() => setDetailsModal(null)} className="btn btn-ghost">Fermer</button>
+                  <button onClick={saveReassignment} className="btn btn-primary" disabled={reassigning || !selectedAgentId}>
+                    {reassigning ? 'Réassignation…' : '🔄 Réassigner'}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
+
+      <Toast toasts={toasts} />
     </>
   );
 }
