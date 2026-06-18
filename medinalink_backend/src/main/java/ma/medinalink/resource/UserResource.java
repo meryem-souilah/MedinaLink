@@ -106,6 +106,42 @@ public class UserResource {
     }
 
     @PUT
+    @Path("/{id}/password")
+    public Response resetPassword(@PathParam("id") UUID id, Map<String, String> body) {
+        try {
+            String newPassword = body.get("newPassword");
+            if (newPassword == null || newPassword.length() < 6)
+                return Response.status(400).entity(Map.of("message", "Le mot de passe doit faire au moins 6 caractères")).build();
+            userRepository.updatePassword(id, BCrypt.hashpw(newPassword, BCrypt.gensalt(10)));
+            return Response.ok(Map.of("message", "Mot de passe mis à jour avec succès")).build();
+        } catch (Exception e) {
+            return Response.status(500).entity(Map.of("message", e.getMessage())).build();
+        }
+    }
+
+    @PUT
+    @Path("/{id}/toggle-active")
+    public Response toggleActive(@PathParam("id") UUID id) {
+        try {
+            boolean nowActive = userRepository.toggleActive(id);
+            return Response.ok(Map.of("message", nowActive ? "Compte activé" : "Compte désactivé", "isActive", String.valueOf(nowActive))).build();
+        } catch (Exception e) {
+            return Response.status(500).entity(Map.of("message", e.getMessage())).build();
+        }
+    }
+
+    @DELETE
+    @Path("/{id}")
+    public Response deleteUser(@PathParam("id") UUID id) {
+        try {
+            userRepository.deleteById(id);
+            return Response.noContent().build();
+        } catch (Exception e) {
+            return Response.status(500).entity(Map.of("message", "Impossible de supprimer : " + e.getMessage())).build();
+        }
+    }
+
+    @PUT
     @Path("/{id}/role")
     public Response updateRole(@PathParam("id") UUID id, Map<String, String> body) {
         try {
@@ -134,6 +170,7 @@ public class UserResource {
         public String secteur;
         public Double agentLatitude;
         public Double agentLongitude;
+        public boolean isActive;
 
         public static UserDto from(User u) {
             UserDto dto = new UserDto();
@@ -144,6 +181,7 @@ public class UserResource {
             dto.secteur = u.getSecteur();
             dto.agentLatitude = u.getAgentLatitude();
             dto.agentLongitude = u.getAgentLongitude();
+            dto.isActive = u.isActive();
             return dto;
         }
     }

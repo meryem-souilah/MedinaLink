@@ -27,6 +27,12 @@ export default function Admin() {
   const [agentSecteur, setAgentSecteur] = useState('');
   const [agentLat,     setAgentLat]     = useState('');
   const [agentLng,     setAgentLng]     = useState('');
+  const [geoLoading,   setGeoLoading]   = useState(false);
+
+  // Password reset modal
+  const [pwModal,      setPwModal]      = useState(null); // { userId, name }
+  const [newPw,        setNewPw]        = useState('');
+  const [pwChanging,   setPwChanging]   = useState(false);
 
   const { user }          = useAuth();
   const navigate          = useNavigate();
@@ -41,6 +47,24 @@ export default function Admin() {
     try { const res = await api.get('/users'); setUsers(res.data); }
     catch { toast('Impossible de charger les utilisateurs', 'error'); }
     finally { setLoading(false); }
+  };
+
+  const getAgentLocation = () => {
+    if (!navigator.geolocation) { toast('Géolocalisation non supportée par ce navigateur', 'error'); return; }
+    setGeoLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setAgentLat(pos.coords.latitude.toFixed(6));
+        setAgentLng(pos.coords.longitude.toFixed(6));
+        setGeoLoading(false);
+        toast('Position GPS détectée avec succès', 'success');
+      },
+      () => {
+        setGeoLoading(false);
+        toast('Impossible de récupérer la position GPS', 'error');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
   };
 
   const createAgent = async (e) => {
@@ -74,6 +98,37 @@ export default function Admin() {
       toast('Rôle mis à jour avec succès', 'success');
       fetchUsers();
     } catch { toast('Erreur lors de la mise à jour du rôle', 'error'); }
+  };
+
+  const resetPassword = async () => {
+    if (newPw.length < 6) { toast('Mot de passe trop court (min 6 caractères)', 'error'); return; }
+    setPwChanging(true);
+    try {
+      await api.put(`/users/${pwModal.userId}/password`, { newPassword: newPw });
+      toast(`Mot de passe de ${pwModal.name} modifié avec succès`, 'success');
+      setPwModal(null); setNewPw('');
+    } catch (err) {
+      toast(err.response?.data?.message || 'Erreur lors de la modification', 'error');
+    } finally { setPwChanging(false); }
+  };
+
+  const toggleActive = async (userId, currentlyActive) => {
+    try {
+      await api.put(`/users/${userId}/toggle-active`);
+      toast(currentlyActive ? 'Compte désactivé' : 'Compte activé avec succès', currentlyActive ? 'info' : 'success');
+      fetchUsers();
+    } catch { toast('Erreur lors du changement de statut', 'error'); }
+  };
+
+  const deleteUser = async (userId, name) => {
+    if (!window.confirm(`Supprimer définitivement le compte de « ${name} » ?\nCette action est irréversible.`)) return;
+    try {
+      await api.delete(`/users/${userId}`);
+      toast(`Compte de ${name} supprimé`, 'success');
+      fetchUsers();
+    } catch (err) {
+      toast(err.response?.data?.message || 'Impossible de supprimer ce compte', 'error');
+    }
   };
 
   const filteredUsers = useMemo(() => {
@@ -172,9 +227,23 @@ export default function Admin() {
               {/* Agent-specific fields */}
               {agentRole === 'AGENT' && (
                 <>
-                  <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', marginBottom:'0.75rem', borderTop:'1px solid var(--border-subtle)', paddingTop:'0.75rem' }}>
-                    📍 Informations de zone (optionnel — utilisées pour l'auto-assignation des signalements)
-                  </p>
+                  <div style={{ display:'flex', alignItems:'center', justifyContent:'space-between', flexWrap:'wrap', gap:'0.5rem', borderTop:'1px solid var(--border-subtle)', paddingTop:'0.75rem', marginBottom:'0.75rem' }}>
+                    <p style={{ fontSize:'0.78rem', color:'var(--text-muted)', margin:0 }}>
+                      📍 Informations de zone (optionnel — utilisées pour l'auto-assignation des signalements)
+                    </p>
+                    <button
+                      type="button"
+                      onClick={getAgentLocation}
+                      disabled={geoLoading}
+                      className="btn btn-ghost btn-sm"
+                      style={{ fontSize:'0.78rem', display:'flex', alignItems:'center', gap:'0.35rem', whiteSpace:'nowrap' }}
+                    >
+                      {geoLoading
+                        ? <><span style={{ width:12, height:12, border:'2px solid var(--text-muted)', borderTopColor:'var(--accent)', borderRadius:'50%', animation:'spin 0.7s linear infinite', display:'inline-block' }} /> Localisation…</>
+                        : '📍 Utiliser ma position'
+                      }
+                    </button>
+                  </div>
                   <div style={{ display:'grid', gridTemplateColumns:'repeat(auto-fill, minmax(180px,1fr))', gap:'1rem', marginBottom:'1rem' }}>
                     <div className="form-group">
                       <label className="form-label">Secteur</label>
@@ -222,18 +291,18 @@ export default function Admin() {
               <table className="data-table">
                 <thead>
                   <tr>
-                    {['Nom', 'Email', 'Rôle', 'Actions'].map(h => <th key={h}>{h}</th>)}
+                    {['Nom', 'Email', 'Rôle', 'Statut', 'Actions'].map(h => <th key={h}>{h}</th>)}
                   </tr>
                 </thead>
                 <tbody>
                   {filteredUsers.length === 0 ? (
-                    <tr><td colSpan={4} style={{ textAlign:'center', padding:'2rem', color:'var(--text-muted)', fontSize:'0.875rem' }}>
+                    <tr><td colSpan={5} style={{ textAlign:'center', padding:'2rem', color:'var(--text-muted)', fontSize:'0.875rem' }}>
                       Aucun utilisateur trouvé
                     </td></tr>
                   ) : filteredUsers.map(u => {
                     const rb = ROLE_BADGE[u.role] || ROLE_BADGE.CITIZEN;
                     return (
-                      <tr key={u.id}>
+                      <tr key={u.id} style={{ opacity: u.isActive ? 1 : 0.6 }}>
                         <td style={{ fontWeight:600, color:'var(--text-warm)' }}>{u.fullName}</td>
                         <td style={{ color:'var(--text-muted)' }}>{u.email}</td>
                         <td>
@@ -242,8 +311,13 @@ export default function Admin() {
                           </span>
                         </td>
                         <td>
+                          <span className={`badge ${u.isActive ? 'badge-resolved' : 'badge-rejected'}`}>
+                            <span className="badge-dot" />{u.isActive ? 'Actif' : 'Inactif'}
+                          </span>
+                        </td>
+                        <td>
                           {u.id !== user?.userId ? (
-                            <div className="action-row">
+                            <div className="action-row" style={{ flexWrap:'wrap' }}>
                               {u.role !== 'CITIZEN' && (
                                 <button onClick={() => changeRole(u.id,'CITIZEN')} className="btn btn-success btn-sm">→ Citoyen</button>
                               )}
@@ -253,6 +327,18 @@ export default function Admin() {
                               {u.role !== 'ADMIN' && (
                                 <button onClick={() => changeRole(u.id,'ADMIN')} className="btn btn-danger btn-sm">→ Admin</button>
                               )}
+                              <button
+                                onClick={() => { setPwModal({ userId: u.id, name: u.fullName }); setNewPw(''); }}
+                                className="btn btn-ghost btn-sm"
+                              >🔑 MDP</button>
+                              <button
+                                onClick={() => toggleActive(u.id, u.isActive)}
+                                className={`btn btn-sm ${u.isActive ? 'btn-danger' : 'btn-success'}`}
+                              >{u.isActive ? '🚫 Désactiver' : '✅ Activer'}</button>
+                              <button
+                                onClick={() => deleteUser(u.id, u.fullName)}
+                                className="btn btn-danger btn-sm"
+                              >🗑 Supprimer</button>
                             </div>
                           ) : (
                             <span style={{ fontSize:'0.75rem', color:'var(--text-faint)' }}>C'est vous</span>
@@ -268,6 +354,36 @@ export default function Admin() {
 
         </div>
       </div>
+      {/* Password reset modal */}
+      {pwModal && (
+        <div className="modal-overlay" onClick={() => { setPwModal(null); setNewPw(''); }}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:420 }}>
+            <h3 className="modal-title">🔑 Changer le mot de passe</h3>
+            <p style={{ fontSize:'0.85rem', color:'var(--text-muted)', marginBottom:'1.25rem' }}>
+              Compte : <strong style={{ color:'var(--text-warm)' }}>{pwModal.name}</strong>
+            </p>
+            <div className="form-group" style={{ marginBottom:'1.25rem' }}>
+              <label className="form-label">Nouveau mot de passe</label>
+              <input
+                type="password"
+                value={newPw}
+                onChange={e => setNewPw(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && resetPassword()}
+                placeholder="Min. 6 caractères"
+                className="form-input"
+                autoFocus
+              />
+            </div>
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:'0.5rem' }}>
+              <button onClick={() => { setPwModal(null); setNewPw(''); }} className="btn btn-ghost">Annuler</button>
+              <button onClick={resetPassword} disabled={pwChanging} className="btn btn-primary">
+                {pwChanging ? 'Modification…' : '✔ Confirmer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Toast toasts={toasts} />
     </>
   );

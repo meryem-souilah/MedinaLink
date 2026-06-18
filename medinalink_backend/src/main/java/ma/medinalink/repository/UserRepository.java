@@ -110,6 +110,21 @@ public void updateRole(UUID id, ma.medinalink.entity.Role newRole) {
         }
     }
 
+    @Transactional
+    public boolean toggleActive(UUID id) {
+        User user = em.find(User.class, id);
+        if (user == null) return false;
+        user.setActive(!user.isActive());
+        em.merge(user);
+        return user.isActive();
+    }
+
+    @Transactional
+    public void deleteById(UUID id) {
+        User user = em.find(User.class, id);
+        if (user != null) em.remove(user);
+    }
+
     // -------------------------------------------------------
     // Vérifier si un email est déjà utilisé
     // -------------------------------------------------------
