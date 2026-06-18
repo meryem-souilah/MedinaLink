@@ -98,26 +98,43 @@ public class ReportService {
 
     private void assignNearestAgent(Report report) {
         try {
-            List<User> agents = userRepository.findAllAgents();
-            if (agents.isEmpty()) return;
+            List<User> allAgents = userRepository.findAllAgents();
+            if (allAgents.isEmpty()) return;
 
+            // 1. Priorité : agents dont le secteur correspond à l'adresse du signalement
+            List<User> candidates = allAgents;
+            String address = report.getAddress();
+            if (address != null && !address.isBlank()) {
+                String addrLower = address.toLowerCase();
+                List<User> sectorMatches = allAgents.stream()
+                    .filter(a -> a.getSecteur() != null && !a.getSecteur().isBlank()
+                              && addrLower.contains(a.getSecteur().toLowerCase()))
+                    .collect(Collectors.toList());
+                if (!sectorMatches.isEmpty()) {
+                    candidates = sectorMatches;
+                }
+            }
+
+            // 2. Parmi les candidats, choisir le plus proche par GPS
             User nearest = null;
             double minDist = Double.MAX_VALUE;
-
-            for (User agent : agents) {
+            for (User agent : candidates) {
                 if (agent.getAgentLatitude() == null || agent.getAgentLongitude() == null) continue;
                 double dist = haversine(report.getLatitude(), report.getLongitude(),
                                        agent.getAgentLatitude(), agent.getAgentLongitude());
                 if (dist < minDist) { minDist = dist; nearest = agent; }
             }
 
-            // Si aucun agent n'a de coordonnées, prendre le premier agent disponible
-            if (nearest == null) nearest = agents.get(0);
+            // 3. Fallback : aucun candidat n'a de coords GPS → premier de la liste
+            if (nearest == null) nearest = candidates.get(0);
 
             report.setAssignedAgentId(nearest.getId());
             report.setAssignedAgentName(nearest.getFullName());
             report.setSecteur(nearest.getSecteur());
             reportRepository.update(report);
+
+            System.out.println("[ReportService] Assigné à : " + nearest.getFullName()
+                + " (secteur=" + nearest.getSecteur() + ", dist=" + (int) minDist + "m)");
         } catch (Exception e) {
             System.err.println("[ReportService] Auto-assignation échouée : " + e.getMessage());
         }
