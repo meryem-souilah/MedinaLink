@@ -14,7 +14,8 @@ function AuthCanvas() {
     const H = canvas.parentElement.offsetHeight || 700;
 
     const scene  = new THREE.Scene();
-    scene.fog    = new THREE.FogExp2(0x0F0703, 0.018);
+    const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+    if (isDark) scene.fog = new THREE.FogExp2(0x0F0703, 0.018);
 
     const camera = new THREE.PerspectiveCamera(50, W / H, 0.1, 100);
     camera.position.z = 18;
@@ -22,7 +23,7 @@ function AuthCanvas() {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    renderer.setClearColor(0x0F0703, 1);
+    renderer.setClearColor(0x000000, 0);
 
     /* Central torus — Moroccan arabesque ring */
     const torusGeo = new THREE.TorusGeometry(5.5, 0.025, 12, 100);
