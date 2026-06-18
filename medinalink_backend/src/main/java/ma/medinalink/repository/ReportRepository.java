@@ -190,6 +190,17 @@ public class ReportRepository {
     }
 
     // -------------------------------------------------------
+    // Signalements PENDING dont l'adresse contient le secteur donné
+    // -------------------------------------------------------
+    public List<Report> findPendingBySector(String sector) {
+        String pattern = "%" + sector.toLowerCase() + "%";
+        return em.createQuery(
+            "SELECT r FROM Report r WHERE r.status = 'PENDING' AND LOWER(r.address) LIKE :pattern",
+            Report.class
+        ).setParameter("pattern", pattern).getResultList();
+    }
+
+    // -------------------------------------------------------
     // Ajouter un upvote
     // -------------------------------------------------------
     @Transactional

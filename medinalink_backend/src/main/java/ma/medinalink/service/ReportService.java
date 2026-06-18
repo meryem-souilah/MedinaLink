@@ -260,6 +260,20 @@ public class ReportService {
         return toResponse(updated);
     }
 
+    public int assignPendingReportsToAgent(User agent) {
+        if (agent.getSecteur() == null || agent.getSecteur().isBlank()) return 0;
+        List<Report> pending = reportRepository.findPendingBySector(agent.getSecteur());
+        for (Report report : pending) {
+            report.setAssignedAgentId(agent.getId());
+            report.setAssignedAgentName(agent.getFullName());
+            report.setSecteur(agent.getSecteur());
+            reportRepository.update(report);
+        }
+        System.out.println("[ReportService] " + pending.size() + " signalement(s) PENDING assigné(s) à "
+            + agent.getFullName() + " (secteur=" + agent.getSecteur() + ")");
+        return pending.size();
+    }
+
     public ReportResponse assignToAgent(UUID reportId, UUID agentId) {
         Report report = reportRepository.findById(reportId)
             .orElseThrow(() -> new NotFoundException("Signalement non trouvé"));

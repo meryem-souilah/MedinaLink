@@ -8,6 +8,7 @@ import ma.medinalink.config.Secured;
 import ma.medinalink.entity.Role;
 import ma.medinalink.entity.User;
 import ma.medinalink.repository.UserRepository;
+import ma.medinalink.service.ReportService;
 import org.mindrot.jbcrypt.BCrypt;
 
 import java.util.List;
@@ -23,6 +24,9 @@ public class UserResource {
 
     @Inject
     private UserRepository userRepository;
+
+    @Inject
+    private ReportService reportService;
 
     @GET
     public Response findAll() {
@@ -98,6 +102,13 @@ public class UserResource {
             }
 
             User saved = userRepository.save(newUser);
+
+            // Si c'est un agent avec un secteur, assigner immédiatement les signalements PENDING correspondants
+            if (saved.getRole() == Role.AGENT) {
+                int assigned = reportService.assignPendingReportsToAgent(saved);
+                System.out.println("[UserResource] Nouvel agent créé : " + assigned + " signalement(s) réassigné(s)");
+            }
+
             return Response.status(201).entity(UserDto.from(saved)).build();
 
         } catch (Exception e) {
