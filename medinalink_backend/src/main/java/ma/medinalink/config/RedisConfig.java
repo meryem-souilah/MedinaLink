@@ -30,12 +30,13 @@ public class RedisConfig {
             int    port     = AppConfig.redisPort();
             String password = AppConfig.redisPassword();
 
+            boolean ssl = AppConfig.redisSsl();
             if (!password.isBlank()) {
-                pool = new JedisPool(cfg, host, port, 2000, password);
+                pool = new JedisPool(cfg, host, port, 2000, password, ssl);
             } else {
-                pool = new JedisPool(cfg, host, port, 2000);
+                pool = new JedisPool(cfg, host, port, 2000, null, ssl);
             }
-            System.out.printf("[Redis] Pool connecté → %s:%d%n", host, port);
+            System.out.printf("[Redis] Pool connecté → %s:%d (ssl=%b)%n", host, port, ssl);
         } catch (Exception e) {
             System.err.println("[Redis] Connexion impossible : " + e.getMessage());
         }

@@ -36,6 +36,10 @@ public final class AppConfig {
         return Boolean.parseBoolean(env("REDIS_ENABLED", "false"));
     }
 
+    public static boolean redisSsl() {
+        return Boolean.parseBoolean(env("REDIS_SSL", "false"));
+    }
+
     // --- AI microservice ---
     public static String aiServiceUrl() {
         return env("AI_SERVICE_URL", "http://localhost:5000");
