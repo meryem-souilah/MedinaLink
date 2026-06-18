@@ -10,7 +10,7 @@ gsap.registerPlugin(ScrollTrigger);
    THREE.JS — MOROCCAN EARTH SPHERE
    Dark espresso background with terracotta + amber particles
    ───────────────────────────────────────────────────────────── */
-function EarthCanvas() {
+function EarthCanvas({ isDark }) {
   const ref = useRef();
 
   useEffect(() => {
@@ -19,7 +19,7 @@ function EarthCanvas() {
     const H = window.innerHeight;
 
     const scene  = new THREE.Scene();
-    scene.fog    = new THREE.FogExp2(0x070401, 0.012);
+    if (isDark) scene.fog = new THREE.FogExp2(0x070401, 0.012);
 
     const camera = new THREE.PerspectiveCamera(52, W / H, 0.1, 220);
     camera.position.set(0, 0, 30);
@@ -27,7 +27,7 @@ function EarthCanvas() {
     const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
     renderer.setSize(W, H);
     renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
-    renderer.setClearColor(0x070401, 1);
+    renderer.setClearColor(0x000000, 0);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
 
     /* ── CENTRAL ICOSAHEDRON WIREFRAME (city backbone) ── */
@@ -282,7 +282,7 @@ function EarthCanvas() {
       [pGeo, pMat, lGeo, lMat, icoGeo, icoMat, coreGeo, coreMat, dGeo, dMat].forEach(o => o.dispose?.());
       rings.forEach(({ geometry: g, material: m }) => { g.dispose(); m.dispose(); });
     };
-  }, []);
+  }, [isDark]);
 
   return (
     <canvas
@@ -340,6 +340,13 @@ const FEATURES = [
 export default function Landing() {
   const [scrolled, setScrolled] = useState(false);
   const heroPrimaryRef = useMagnetic(0.3);
+
+  const [isDark, setIsDark] = useState(() => localStorage.getItem('ml-theme') === 'dark');
+
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light');
+    localStorage.setItem('ml-theme', isDark ? 'dark' : 'light');
+  }, [isDark]);
 
   /* Scroll detection */
   useEffect(() => {
@@ -454,7 +461,7 @@ export default function Landing() {
       <div className="noise-overlay" />
 
       {/* Three.js canvas */}
-      <EarthCanvas />
+      <EarthCanvas isDark={isDark} />
 
       {/* NAV */}
       <nav className={`landing-nav${scrolled ? ' scrolled' : ''}`}>
@@ -464,6 +471,9 @@ export default function Landing() {
           <a href="#process"  className="landing-nav-link">Comment ça marche</a>
         </div>
         <div className="landing-nav-actions">
+          <button onClick={() => setIsDark(p => !p)} className="btn-nav-theme" title={isDark ? 'Mode jour' : 'Mode nuit'}>
+            {isDark ? '☀️' : '🌙'}
+          </button>
           <Link to="/login"    className="btn-nav-ghost">Connexion</Link>
           <Link to="/register" className="btn-nav-gold">Commencer →</Link>
         </div>
@@ -471,10 +481,7 @@ export default function Landing() {
 
       {/* ── HERO ── */}
       <section className="hero-section" style={{ minHeight: '100vh', position: 'relative', zIndex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', textAlign: 'center', padding: '0 clamp(1.5rem, 5vw, 4rem)' }}>
-        <div style={{
-          position: 'absolute', inset: 0, pointerEvents: 'none',
-          background: 'radial-gradient(ellipse 70% 55% at 50% 55%, rgba(196,98,45,0.07) 0%, transparent 60%), linear-gradient(to top, #070401 0%, transparent 35%), linear-gradient(to bottom, rgba(7,4,1,0.45) 0%, transparent 22%)',
-        }} />
+        <div className="hero-overlay" />
 
         <div className="hero-content" style={{ position: 'relative', maxWidth: 1000 }}>
           <div className="hero-label">
