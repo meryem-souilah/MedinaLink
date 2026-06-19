@@ -144,7 +144,7 @@ public class ReportRepository {
         StringBuilder jpql = new StringBuilder(
             "SELECT r FROM Report r WHERE (r.assignedAgentId = :agentId");
         if (city != null && !city.isBlank())
-            jpql.append(" OR (r.detectedCity = :city AND r.assignedAgentId IS NULL)");
+            jpql.append(" OR (r.detectedCity = :city AND r.assignedAgentId IS NULL AND r.status = 'PENDING')");
         jpql.append(")");
         if (status != null && !status.isBlank())     jpql.append(" AND r.status = :status");
         if (category != null && !category.isBlank()) jpql.append(" AND r.category = :category");
