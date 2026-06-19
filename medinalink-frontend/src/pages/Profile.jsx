@@ -12,8 +12,8 @@ const ROLE_META = {
 };
 
 export default function Profile() {
-  const { user }          = useAuth();
-  const { toasts, toast } = useToast();
+  const { user, updateUser } = useAuth();
+  const { toasts, toast }    = useToast();
   const role              = ROLE_META[user?.role] || ROLE_META.CITIZEN;
   const initial           = (user?.fullName || 'U').charAt(0).toUpperCase();
 
@@ -22,6 +22,19 @@ export default function Profile() {
   const [newPwd2,   setNewPwd2]   = useState('');
   const [changingPw, setChangingPw] = useState(false);
   const [showPwForm, setShowPwForm] = useState(false);
+
+  const [myCity,    setMyCity]    = useState(user?.city || '');
+  const [savingCity, setSavingCity] = useState(false);
+
+  const handleSaveCity = async () => {
+    setSavingCity(true);
+    try {
+      await api.put('/users/my/city', { city: myCity });
+      updateUser({ city: myCity || null });
+      toast('Ville mise à jour avec succès', 'success');
+    } catch { toast('Erreur lors de la mise à jour de la ville', 'error'); }
+    finally { setSavingCity(false); }
+  };
 
   const handleChangePw = async (e) => {
     e.preventDefault();
@@ -100,6 +113,31 @@ export default function Profile() {
               💡 {role.tip}
             </p>
           </div>
+
+          {/* Ville — citoyens uniquement */}
+          {user?.role === 'CITIZEN' && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border-vis)', borderRadius: 'var(--r-lg)', padding: '1.25rem', marginBottom: '1.25rem' }}>
+              <p style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-warm)', marginBottom: '0.75rem' }}>
+                🏙 Ma ville — filtre des signalements
+              </p>
+              <p style={{ fontSize: '0.78rem', color: 'var(--text-muted)', marginBottom: '0.75rem' }}>
+                Définissez votre ville pour ne voir que les signalements qui vous concernent.
+              </p>
+              <div style={{ display: 'flex', gap: '0.5rem', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  value={myCity}
+                  onChange={e => setMyCity(e.target.value)}
+                  placeholder="Ex: Casablanca, Rabat…"
+                  className="form-input"
+                  style={{ flex: 1 }}
+                />
+                <button onClick={handleSaveCity} disabled={savingCity} className="btn btn-primary">
+                  {savingCity ? 'Enregistrement…' : '✔ Sauvegarder'}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* Password change */}
           <div style={{ background: 'var(--surface)', border: '1px solid var(--border-vis)', borderRadius: 'var(--r-lg)', overflow: 'hidden' }}>

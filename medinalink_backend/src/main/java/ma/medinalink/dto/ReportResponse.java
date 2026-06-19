@@ -23,6 +23,9 @@ public class ReportResponse {
     private UUID assignedAgentId;
     private String assignedAgentName;
     private String secteur;
+    private String detectedCity;
+    private String resolutionPhotoUrl;
+    private int commentCount;
 
     public ReportResponse() {}
 
@@ -90,4 +93,10 @@ public class ReportResponse {
     public void setAssignedAgentId(UUID assignedAgentId) { this.assignedAgentId = assignedAgentId; }
     public void setAssignedAgentName(String assignedAgentName) { this.assignedAgentName = assignedAgentName; }
     public void setSecteur(String secteur) { this.secteur = secteur; }
+    public String getDetectedCity() { return detectedCity; }
+    public void setDetectedCity(String detectedCity) { this.detectedCity = detectedCity; }
+    public String getResolutionPhotoUrl() { return resolutionPhotoUrl; }
+    public void setResolutionPhotoUrl(String resolutionPhotoUrl) { this.resolutionPhotoUrl = resolutionPhotoUrl; }
+    public int getCommentCount() { return commentCount; }
+    public void setCommentCount(int commentCount) { this.commentCount = commentCount; }
 }

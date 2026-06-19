@@ -117,6 +117,7 @@ export default function Register() {
   const [fullName, setFullName] = useState('');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
+  const [city,     setCity]     = useState('');
   const [error,    setError]    = useState('');
   const [loading,  setLoading]  = useState(false);
   const formRef = useRef();
@@ -140,7 +141,7 @@ export default function Register() {
     }
     setLoading(true);
     try {
-      const res = await api.post('/auth/register', { fullName, email, password });
+      const res = await api.post('/auth/register', { fullName, email, password, city: city.trim() });
       login(res.data);
       navigate('/citizen/reports');
     } catch (err) {
@@ -241,6 +242,15 @@ export default function Register() {
               onChange={e => setPassword(e.target.value)}
               placeholder="Au moins 6 caractères"
               required autoComplete="new-password" minLength={6}
+            />
+          </div>
+          <div className="form-field">
+            <label htmlFor="city">Votre ville</label>
+            <input
+              id="city" type="text" value={city}
+              onChange={e => setCity(e.target.value)}
+              placeholder="Ex: Casablanca, Rabat, Marrakech…"
+              required autoComplete="address-level2"
             />
           </div>
           <button type="submit" className="btn-auth" disabled={loading}>

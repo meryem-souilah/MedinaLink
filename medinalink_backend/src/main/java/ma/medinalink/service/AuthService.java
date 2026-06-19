@@ -70,6 +70,10 @@ public class AuthService {
         user.setEmail(request.getEmail().toLowerCase().trim());
         user.setPasswordHash(passwordHash);
         user.setFullName(request.getFullName().trim());
+        if (request.getCity() == null || request.getCity().isBlank()) {
+            throw new BadRequestException("La ville est obligatoire");
+        }
+        user.setCity(request.getCity().trim());
         // Le rôle par défaut CITIZEN est mis dans @PrePersist de l'entité
 
         // 5. Sauvegarder en BDD
@@ -88,7 +92,10 @@ public class AuthService {
             savedUser.getId(),
             savedUser.getEmail(),
             savedUser.getFullName(),
-            savedUser.getRole().name()
+            savedUser.getRole().name(),
+            savedUser.getSecteur(),
+            savedUser.getAgentCategories(),
+            savedUser.getCity()
         );
     }
 
@@ -133,7 +140,10 @@ public class AuthService {
             user.getId(),
             user.getEmail(),
             user.getFullName(),
-            user.getRole().name()
+            user.getRole().name(),
+            user.getSecteur(),
+            user.getAgentCategories(),
+            user.getCity()
         );
     }
 

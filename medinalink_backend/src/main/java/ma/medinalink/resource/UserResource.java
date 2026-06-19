@@ -2,12 +2,15 @@ package ma.medinalink.resource;
 
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import ma.medinalink.config.Secured;
 import ma.medinalink.entity.Role;
 import ma.medinalink.entity.User;
 import ma.medinalink.repository.UserRepository;
+import ma.medinalink.service.JwtService;
 import ma.medinalink.service.ReportService;
 import org.mindrot.jbcrypt.BCrypt;
 
@@ -27,6 +30,9 @@ public class UserResource {
 
     @Inject
     private ReportService reportService;
+
+    @Inject
+    private JwtService jwtService;
 
     @GET
     public Response findAll() {
@@ -119,6 +125,32 @@ public class UserResource {
     }
 
     @PUT
+    @Path("/{id}/zone")
+    public Response updateZone(@PathParam("id") UUID id, Map<String, String> body) {
+        try {
+            String secteur    = body.getOrDefault("secteur",    "").trim();
+            String categories = body.getOrDefault("categories", "").trim();
+
+            userRepository.updateZone(id,
+                secteur.isBlank()    ? null : secteur,
+                categories.isBlank() ? null : categories);
+
+            // Recharger l'entité mise à jour et réassigner les signalements PENDING
+            User user = userRepository.findById(id).orElseThrow(() -> new NotFoundException("Utilisateur non trouvé"));
+            int assigned = reportService.assignPendingReportsToAgent(user);
+
+            return Response.ok(Map.of(
+                "message",  "Zone mise à jour — " + assigned + " signalement(s) réassigné(s)",
+                "assigned", String.valueOf(assigned)
+            )).build();
+        } catch (NotFoundException e) {
+            return Response.status(404).entity(Map.of("message", e.getMessage())).build();
+        } catch (Exception e) {
+            return Response.status(500).entity(Map.of("message", e.getMessage())).build();
+        }
+    }
+
+    @PUT
     @Path("/{id}/password")
     public Response resetPassword(@PathParam("id") UUID id, Map<String, String> body) {
         try {
@@ -151,6 +183,20 @@ public class UserResource {
             return Response.noContent().build();
         } catch (Exception e) {
             return Response.status(500).entity(Map.of("message", "Impossible de supprimer : " + e.getMessage())).build();
+        }
+    }
+
+    @PUT
+    @Path("/my/city")
+    public Response updateMyCity(Map<String, String> body, @Context HttpHeaders headers) {
+        try {
+            String authHeader = headers.getHeaderString(HttpHeaders.AUTHORIZATION);
+            UUID userId = jwtService.getUserIdFromToken(authHeader.substring(7));
+            String city = body.getOrDefault("city", "").trim();
+            userRepository.updateCity(userId, city.isBlank() ? null : city);
+            return Response.ok(Map.of("message", "Ville mise à jour", "city", city)).build();
+        } catch (Exception e) {
+            return Response.status(500).entity(Map.of("message", e.getMessage())).build();
         }
     }
 

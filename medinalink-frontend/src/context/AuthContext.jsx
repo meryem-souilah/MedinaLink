@@ -20,10 +20,18 @@ export function AuthProvider({ children }) {
     setUser(null);
   };
 
+  const updateUser = (patch) => {
+    setUser(prev => {
+      const updated = { ...prev, ...patch };
+      localStorage.setItem('user', JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const isAuthenticated = !!user;
 
   return (
-    <AuthContext.Provider value={{ user, login, logout, isAuthenticated }}>
+    <AuthContext.Provider value={{ user, login, logout, updateUser, isAuthenticated }}>
       {children}
     </AuthContext.Provider>
   );

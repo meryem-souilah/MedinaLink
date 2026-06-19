@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import api from '../api/axios';
 import gsap from 'gsap';
 
 export default function Navbar() {
@@ -14,6 +15,89 @@ export default function Navbar() {
   const isAdmin   = user?.role === 'ADMIN';
 
   const active = (path) => pathname === path ? ' active' : '';
+
+  // ── Notifications ───────────────────────────────────────────
+  const [notifCount, setNotifCount] = useState(0);
+  const [notifs,     setNotifs]     = useState([]);
+  const [notifOpen,  setNotifOpen]  = useState(false);
+  const notifRef = useRef();
+
+  useEffect(() => {
+    if (!user?.userId) return;
+    const fetchNotifs = async () => {
+      try {
+        const res = await api.get('/notifications/my');
+        setNotifCount(res.data.unreadCount || 0);
+        setNotifs(res.data.notifications || []);
+      } catch {}
+    };
+    fetchNotifs();
+    const interval = setInterval(fetchNotifs, 30000);
+    return () => clearInterval(interval);
+  }, [user]);
+
+  useEffect(() => {
+    if (!notifOpen) return;
+    const handler = (e) => { if (!notifRef.current?.contains(e.target)) setNotifOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [notifOpen]);
+
+  const markAllRead = async () => {
+    try {
+      await api.put('/notifications/read-all');
+      setNotifCount(0);
+      setNotifs(prev => prev.map(n => ({ ...n, isRead: true })));
+    } catch {}
+  };
+
+  const notifBell = (
+    <div ref={notifRef} style={{ position: 'relative' }}>
+      <button
+        onClick={() => { setNotifOpen(v => !v); if (!notifOpen && notifCount > 0) markAllRead(); }}
+        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.15rem', position: 'relative', padding: '0 4px' }}
+        title="Notifications"
+      >
+        🔔
+        {notifCount > 0 && (
+          <span style={{
+            position: 'absolute', top: -4, right: -2,
+            background: 'var(--red)', color: '#fff', borderRadius: '50%',
+            fontSize: '0.6rem', fontWeight: 800, width: 16, height: 16,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            lineHeight: 1,
+          }}>{notifCount > 9 ? '9+' : notifCount}</span>
+        )}
+      </button>
+      {notifOpen && (
+        <div style={{
+          position: 'absolute', right: 0, top: '130%', width: 320, maxHeight: 380,
+          overflowY: 'auto', background: 'var(--surface)', border: '1px solid var(--border-vis)',
+          borderRadius: 'var(--r-lg)', boxShadow: '0 8px 32px rgba(0,0,0,0.18)', zIndex: 999,
+        }}>
+          <div style={{ padding: '0.75rem 1rem', borderBottom: '1px solid var(--border-subtle)', fontWeight: 700, fontSize: '0.82rem', color: 'var(--text-warm)' }}>
+            Notifications
+          </div>
+          {notifs.length === 0 ? (
+            <p style={{ padding: '1.25rem', textAlign: 'center', color: 'var(--text-muted)', fontSize: '0.82rem' }}>Aucune notification</p>
+          ) : notifs.map(n => (
+            <div key={n.id} style={{
+              padding: '0.7rem 1rem', borderBottom: '1px solid var(--border-subtle)',
+              background: n.isRead ? 'transparent' : 'var(--gold-dim)',
+              fontSize: '0.8rem', color: 'var(--text-body)', lineHeight: 1.4,
+            }}>
+              <p style={{ margin: 0, fontWeight: n.isRead ? 400 : 600 }}>{n.message}</p>
+              {n.createdAt && (
+                <p style={{ margin: '0.2rem 0 0', fontSize: '0.7rem', color: 'var(--text-muted)' }}>
+                  {new Date(n.createdAt).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}
+                </p>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   // ── Theme ───────────────────────────────────────────────────
   const [isDark, setIsDark] = useState(() => {
@@ -85,6 +169,7 @@ export default function Navbar() {
           </div>
           <div className="app-nav-right">
             <Link to="/profile" className={`app-nav-link${active('/profile')}`} style={{ fontSize:'0.8rem' }}>Mon profil</Link>
+            {notifBell}
             {themeBtn}
             <button onClick={handleLogout} className="btn-nav-logout">Déconnexion</button>
             {hamburger}
@@ -128,6 +213,7 @@ export default function Navbar() {
               {user?.fullName}
             </span>
             <Link to="/profile" className={`app-nav-link${active('/profile')}`} style={{ fontSize:'0.8rem' }}>Mon profil</Link>
+            {notifBell}
             {themeBtn}
             <button onClick={handleLogout} className="btn-nav-logout">Déconnexion</button>
             {hamburger}

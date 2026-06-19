@@ -37,27 +37,23 @@ public class ReportRepository {
     // Tous les signalements avec pagination et filtres optionnels
     // -------------------------------------------------------
     public List<Report> findAll(int page, int size, String status, String category) {
+        return findAll(page, size, status, category, null);
+    }
+
+    public List<Report> findAll(int page, int size, String status, String category, String city) {
         StringBuilder jpql = new StringBuilder("SELECT r FROM Report r");
         List<String> conditions = new java.util.ArrayList<>();
 
-        if (status != null && !status.isBlank()) {
-            conditions.add("r.status = :status");
-        }
-        if (category != null && !category.isBlank()) {
-            conditions.add("r.category = :category");
-        }
-        if (!conditions.isEmpty()) {
-            jpql.append(" WHERE ").append(String.join(" AND ", conditions));
-        }
+        if (status != null && !status.isBlank())   conditions.add("r.status = :status");
+        if (category != null && !category.isBlank()) conditions.add("r.category = :category");
+        if (city != null && !city.isBlank())         conditions.add("r.detectedCity = :city");
+        if (!conditions.isEmpty()) jpql.append(" WHERE ").append(String.join(" AND ", conditions));
         jpql.append(" ORDER BY r.createdAt DESC");
 
         var query = em.createQuery(jpql.toString(), Report.class);
-        if (status != null && !status.isBlank()) {
-            query.setParameter("status", status);
-        }
-        if (category != null && !category.isBlank()) {
-            query.setParameter("category", category);
-        }
+        if (status != null && !status.isBlank())   query.setParameter("status", status);
+        if (category != null && !category.isBlank()) query.setParameter("category", category);
+        if (city != null && !city.isBlank())         query.setParameter("city", city);
         return query.setFirstResult(page * size).setMaxResults(size).getResultList();
     }
 
@@ -250,10 +246,10 @@ public class ReportRepository {
     // Ajouter un upvote
     // -------------------------------------------------------
     @Transactional
-    public Report upvote(UUID id) {
+    public Report upvoteIncrement(UUID id) {
         Report report = em.find(Report.class, id);
         if (report != null) {
-            report.setUpvotes(report.getUpvotes() + 1);
+            report.setUpvotes((report.getUpvotes() == null ? 0 : report.getUpvotes()) + 1);
             em.merge(report);
         }
         return report;

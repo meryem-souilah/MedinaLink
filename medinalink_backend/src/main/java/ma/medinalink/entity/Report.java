@@ -70,6 +70,12 @@ public class Report {
     @Column(name = "secteur", length = 150)
     private String secteur;
 
+    @Column(name = "detected_city", length = 100)
+    private String detectedCity;
+
+    @Column(name = "resolution_photo_url", columnDefinition = "TEXT")
+    private String resolutionPhotoUrl;
+
     public Report() {}
 
     @PrePersist
@@ -103,6 +109,8 @@ public class Report {
     public java.util.UUID getAssignedAgentId() { return assignedAgentId; }
     public String getAssignedAgentName() { return assignedAgentName; }
     public String getSecteur() { return secteur; }
+    public String getDetectedCity() { return detectedCity; }
+    public String getResolutionPhotoUrl() { return resolutionPhotoUrl; }
 
     // Setters
     public void setId(UUID id) { this.id = id; }
@@ -124,4 +132,6 @@ public class Report {
     public void setAssignedAgentId(java.util.UUID assignedAgentId) { this.assignedAgentId = assignedAgentId; }
     public void setAssignedAgentName(String assignedAgentName) { this.assignedAgentName = assignedAgentName; }
     public void setSecteur(String secteur) { this.secteur = secteur; }
+    public void setDetectedCity(String detectedCity) { this.detectedCity = detectedCity; }
+    public void setResolutionPhotoUrl(String resolutionPhotoUrl) { this.resolutionPhotoUrl = resolutionPhotoUrl; }
 }

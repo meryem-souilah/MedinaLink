@@ -3,6 +3,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import api from '../api/axios';
 import Navbar from '../components/Navbar';
+import Toast from '../components/Toast';
+import { useToast } from '../hooks/useToast';
 import gsap from 'gsap';
 
 const STATUS_MAP = {
@@ -42,18 +44,31 @@ export default function Reports() {
   const [statusFilter,   setStatusFilter]   = useState('ALL');
   const [notification,   setNotification]   = useState('');
   const [upvotingId,     setUpvotingId]     = useState(null);
+  const [votedIds,       setVotedIds]       = useState(new Set());
+  const [commentModal,   setCommentModal]   = useState(null); // { report }
+  const [comments,       setComments]       = useState([]);
+  const [commentsLoading,setCommentsLoading]= useState(false);
+  const [commentText,    setCommentText]    = useState('');
+  const [sendingComment, setSendingComment] = useState(false);
   const gridRef = useRef();
 
   const { user } = useAuth();
+  const { toasts, toast } = useToast();
 
   const fetchReports = () => {
-    api.get('/reports?page=0&size=50')
+    api.get('/reports?page=0&size=100')
       .then(res => setReports(res.data))
       .catch(() => setError('Impossible de charger les signalements'))
       .finally(() => setLoading(false));
   };
 
-  useEffect(() => { fetchReports(); }, []);
+  const fetchMyVotes = () => {
+    api.get('/reports/my-votes')
+      .then(res => setVotedIds(new Set(res.data)))
+      .catch(() => {});
+  };
+
+  useEffect(() => { fetchReports(); fetchMyVotes(); }, []);
 
   /* WebSocket real-time notifications */
   useEffect(() => {
@@ -80,13 +95,40 @@ export default function Reports() {
   }, [loading]);
 
   const handleUpvote = async (id) => {
+    if (votedIds.has(id)) return;
     setUpvotingId(id);
     try {
       await api.post(`/reports/${id}/upvote`);
-      setReports(prev => prev.map(r => r.id === id ? { ...r, upvotes: r.upvotes + 1 } : r));
+      setVotedIds(prev => new Set([...prev, id]));
+      setReports(prev => prev.map(r => r.id === id ? { ...r, upvotes: (r.upvotes || 0) + 1 } : r));
+    } catch (err) {
+      if (err.response?.status === 409) setVotedIds(prev => new Set([...prev, id]));
     } finally {
       setUpvotingId(null);
     }
+  };
+
+  const openComments = async (report) => {
+    setCommentModal(report);
+    setComments([]);
+    setCommentText('');
+    setCommentsLoading(true);
+    try {
+      const res = await api.get(`/reports/${report.id}/comments`);
+      setComments(res.data);
+    } catch {} finally { setCommentsLoading(false); }
+  };
+
+  const sendComment = async () => {
+    if (!commentText.trim() || !commentModal) return;
+    setSendingComment(true);
+    try {
+      const res = await api.post(`/reports/${commentModal.id}/comments`, { content: commentText.trim() });
+      setComments(prev => [...prev, res.data]);
+      setCommentText('');
+    } catch (err) {
+      toast(err.response?.data?.message || 'Erreur lors de l\'envoi du commentaire', 'error');
+    } finally { setSendingComment(false); }
   };
 
   const filtered = reports.filter(r => {
@@ -112,6 +154,7 @@ export default function Reports() {
   );
 
   return (
+    <>
     <div className="app-page">
       <Navbar />
 
@@ -122,7 +165,9 @@ export default function Reports() {
         <div className="page-head" style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', flexWrap:'wrap', gap:'1rem' }}>
           <div>
             <h1 className="page-head-title">Signalements citoyens</h1>
-            <p className="page-head-sub">{filtered.length} résultat{filtered.length !== 1 ? 's' : ''}</p>
+            <p className="page-head-sub">
+              {user?.city ? `📍 ${user.city} — ` : ''}{filtered.length} résultat{filtered.length !== 1 ? 's' : ''}
+            </p>
           </div>
           <Link to="/citizen/reports/create" className="btn btn-primary">
             + Nouveau signalement
@@ -225,10 +270,19 @@ export default function Reports() {
                   <div className="report-card-footer">
                     <button
                       onClick={() => handleUpvote(report.id)}
-                      disabled={upvotingId === report.id}
+                      disabled={upvotingId === report.id || votedIds.has(report.id)}
                       className="btn-upvote"
+                      style={ votedIds.has(report.id) ? { opacity: 0.5, cursor: 'default' } : {} }
+                      title={ votedIds.has(report.id) ? 'Vous avez déjà voté' : 'Voter pour ce signalement' }
                     >
-                      ↑ {report.upvotes} {report.upvotes !== 1 ? 'votes' : 'vote'}
+                      {votedIds.has(report.id) ? '✓' : '↑'} {report.upvotes || 0} {(report.upvotes || 0) !== 1 ? 'votes' : 'vote'}
+                    </button>
+                    <button
+                      onClick={() => openComments(report)}
+                      className="btn-upvote"
+                      style={{ marginLeft: '0.4rem' }}
+                    >
+                      💬 {report.commentCount > 0 ? report.commentCount : ''}
                     </button>
                     <span style={{ fontSize:'0.72rem', color:'var(--text-faint)' }}>
                       {report.createdAt ? timeAgo(report.createdAt) : ''}
@@ -241,5 +295,56 @@ export default function Reports() {
         )}
       </div>
     </div>
+
+      {/* Modal commentaires */}
+      {commentModal && (
+        <div className="modal-overlay" onClick={() => setCommentModal(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth: 520, display: 'flex', flexDirection: 'column', maxHeight: '85vh' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem' }}>
+              <h3 className="modal-title" style={{ margin: 0 }}>💬 {commentModal.title}</h3>
+              <button onClick={() => setCommentModal(null)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '1.1rem', color: 'var(--text-muted)' }}>✕</button>
+            </div>
+            <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.6rem', marginBottom: '0.75rem', minHeight: 80 }}>
+              {commentsLoading ? (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '1rem' }}>Chargement…</p>
+              ) : comments.length === 0 ? (
+                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', textAlign: 'center', padding: '1rem' }}>Aucun commentaire. Soyez le premier !</p>
+              ) : comments.map(c => (
+                <div key={c.id} style={{
+                  background: c.authorRole === 'CITIZEN' ? 'var(--glass)' : 'var(--terra-dim)',
+                  borderRadius: 'var(--r-md)', padding: '0.6rem 0.85rem',
+                  borderLeft: `3px solid ${c.authorRole === 'CITIZEN' ? 'var(--blue)' : 'var(--terra)'}`,
+                }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.2rem' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: 700, color: c.authorRole === 'CITIZEN' ? 'var(--blue)' : 'var(--terra)' }}>
+                      {c.authorRole === 'CITIZEN' ? '👤' : '🛠'} {c.authorName}
+                    </span>
+                    <span style={{ fontSize: '0.68rem', color: 'var(--text-faint)' }}>
+                      {c.createdAt ? new Date(c.createdAt).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : ''}
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.83rem', color: 'var(--text-body)', margin: 0 }}>{c.content}</p>
+                </div>
+              ))}
+            </div>
+            <div style={{ display: 'flex', gap: '0.5rem', borderTop: '1px solid var(--border-subtle)', paddingTop: '0.75rem' }}>
+              <input
+                type="text"
+                value={commentText}
+                onChange={e => setCommentText(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && sendComment()}
+                placeholder="Écrire un commentaire…"
+                className="form-input"
+                style={{ flex: 1 }}
+              />
+              <button onClick={sendComment} disabled={sendingComment || !commentText.trim()} className="btn btn-primary">
+                {sendingComment ? '…' : 'Envoyer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      <Toast toasts={toasts} />
+    </>
   );
 }

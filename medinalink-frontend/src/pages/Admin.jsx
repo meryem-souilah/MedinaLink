@@ -41,6 +41,10 @@ export default function Admin() {
   const [newPw,        setNewPw]        = useState('');
   const [pwChanging,   setPwChanging]   = useState(false);
 
+  // Zone edit modal
+  const [zoneModal,    setZoneModal]    = useState(null); // { userId, name, secteur, categories[] }
+  const [zoneSaving,   setZoneSaving]   = useState(false);
+
   const { user }          = useAuth();
   const navigate          = useNavigate();
   const { toasts, toast } = useToast();
@@ -106,6 +110,21 @@ export default function Admin() {
       toast(currentlyActive ? 'Compte désactivé' : 'Compte activé avec succès', currentlyActive ? 'info' : 'success');
       fetchUsers();
     } catch { toast('Erreur lors du changement de statut', 'error'); }
+  };
+
+  const saveZone = async () => {
+    setZoneSaving(true);
+    try {
+      const res = await api.put(`/users/${zoneModal.userId}/zone`, {
+        secteur:    zoneModal.secteur,
+        categories: zoneModal.categories.join(','),
+      });
+      toast(res.data?.message || 'Zone mise à jour', 'success');
+      setZoneModal(null);
+      fetchUsers();
+    } catch (err) {
+      toast(err.response?.data?.message || 'Erreur lors de la mise à jour', 'error');
+    } finally { setZoneSaving(false); }
   };
 
   const deleteUser = async (userId, name) => {
@@ -321,6 +340,17 @@ export default function Admin() {
                                 onClick={() => { setPwModal({ userId: u.id, name: u.fullName }); setNewPw(''); }}
                                 className="btn btn-ghost btn-sm"
                               >🔑 MDP</button>
+                              {u.role === 'AGENT' && (
+                                <button
+                                  onClick={() => setZoneModal({
+                                    userId: u.id,
+                                    name: u.fullName,
+                                    secteur: u.secteur || '',
+                                    categories: u.agentCategories ? u.agentCategories.split(',').map(c => c.trim()).filter(Boolean) : [],
+                                  })}
+                                  className="btn btn-info btn-sm"
+                                >✏️ Zone</button>
+                              )}
                               <button
                                 onClick={() => toggleActive(u.id, u.isActive)}
                                 className={`btn btn-sm ${u.isActive ? 'btn-danger' : 'btn-success'}`}
@@ -368,6 +398,62 @@ export default function Admin() {
               <button onClick={() => { setPwModal(null); setNewPw(''); }} className="btn btn-ghost">Annuler</button>
               <button onClick={resetPassword} disabled={pwChanging} className="btn btn-primary">
                 {pwChanging ? 'Modification…' : '✔ Confirmer'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Zone edit modal */}
+      {zoneModal && (
+        <div className="modal-overlay" onClick={() => setZoneModal(null)}>
+          <div className="modal-box" onClick={e => e.stopPropagation()} style={{ maxWidth:460 }}>
+            <h3 className="modal-title">✏️ Configurer la zone</h3>
+            <p style={{ fontSize:'0.85rem', color:'var(--text-muted)', marginBottom:'1.25rem' }}>
+              Agent : <strong style={{ color:'var(--text-warm)' }}>{zoneModal.name}</strong>
+            </p>
+            <div className="form-group" style={{ marginBottom:'1.25rem' }}>
+              <label className="form-label">🏙 Ville / Secteur</label>
+              <input
+                type="text"
+                value={zoneModal.secteur}
+                onChange={e => setZoneModal(p => ({ ...p, secteur: e.target.value }))}
+                placeholder="Ex: Casablanca, Rabat…"
+                className="form-input"
+                autoFocus
+              />
+              <span style={{ fontSize:'0.72rem', color:'var(--text-muted)', marginTop:'0.25rem', display:'block' }}>
+                Les signalements PENDING de cette ville seront réassignés
+              </span>
+            </div>
+            <div className="form-group">
+              <label className="form-label">📋 Catégories responsables</label>
+              <span style={{ fontSize:'0.72rem', color:'var(--text-muted)', display:'block', marginBottom:'0.5rem' }}>
+                Laisser vide = toutes les catégories
+              </span>
+              <div style={{ display:'flex', flexDirection:'column', gap:'0.35rem', marginBottom:'1.25rem' }}>
+                {CATEGORIES.map(cat => (
+                  <label key={cat.value} style={{ display:'flex', alignItems:'center', gap:'0.5rem', cursor:'pointer', fontSize:'0.83rem', color:'var(--text-warm)' }}>
+                    <input
+                      type="checkbox"
+                      checked={zoneModal.categories.includes(cat.value)}
+                      onChange={e => setZoneModal(p => ({
+                        ...p,
+                        categories: e.target.checked
+                          ? [...p.categories, cat.value]
+                          : p.categories.filter(c => c !== cat.value),
+                      }))}
+                      style={{ accentColor:'var(--accent)', width:15, height:15 }}
+                    />
+                    {cat.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <div style={{ display:'flex', justifyContent:'flex-end', gap:'0.5rem' }}>
+              <button onClick={() => setZoneModal(null)} className="btn btn-ghost">Annuler</button>
+              <button onClick={saveZone} disabled={zoneSaving} className="btn btn-primary">
+                {zoneSaving ? 'Enregistrement…' : '✔ Enregistrer'}
               </button>
             </div>
           </div>

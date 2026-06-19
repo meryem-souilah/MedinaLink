@@ -106,9 +106,24 @@ export default function CreateReport() {
     setLocating(true);
     setError('');
     navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        setLatitude(pos.coords.latitude.toString());
-        setLongitude(pos.coords.longitude.toString());
+      async (pos) => {
+        const lat = pos.coords.latitude.toString();
+        const lon = pos.coords.longitude.toString();
+        setLatitude(lat);
+        setLongitude(lon);
+        // Géocodage inverse : coordonnées → adresse
+        try {
+          const res = await fetch(
+            `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&addressdetails=1&accept-language=fr`,
+            { headers: { 'User-Agent': 'MedinaLink/1.0' } }
+          );
+          const data = await res.json();
+          if (data && data.display_name) {
+            const parts = data.display_name.split(',').slice(0, 4).join(', ');
+            setAddress(parts);
+            setGeocodeMsg(`✅ ${parts}`);
+          }
+        } catch { /* géocodage inverse optionnel */ }
         setLocating(false);
       },
       (err) => {
@@ -147,7 +162,10 @@ export default function CreateReport() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError('');
-    if (!latitude || !longitude) { setError('Les coordonnées GPS sont obligatoires'); return; }
+    if (!latitude && !longitude && !address.trim()) {
+      setError('Veuillez saisir une adresse ou utiliser "Ma position"');
+      return;
+    }
     setLoading(true);
     try {
       let photoBase64 = null;
@@ -233,7 +251,7 @@ export default function CreateReport() {
 
             <div className="form-group">
               <label className="form-label">
-                Coordonnées GPS *
+                Coordonnées GPS <span style={{ fontWeight:400, fontSize:'0.78rem', color:'var(--text-muted)' }}>(recommandé)</span>
                 {latitude && longitude && (
                   <span style={{ marginLeft: '0.5rem', fontSize: '0.78rem', color: '#166534', fontWeight: '400' }}>
                     ({parseFloat(latitude).toFixed(4)}, {parseFloat(longitude).toFixed(4)})

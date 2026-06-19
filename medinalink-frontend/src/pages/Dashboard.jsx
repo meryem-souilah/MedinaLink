@@ -86,6 +86,9 @@ export default function Dashboard() {
   const agentBottomRef = useRef(null);
 
   // Details modal
+  const [resolutionPhoto,    setResolutionPhoto]    = useState('');
+  const [savingResPhoto,     setSavingResPhoto]     = useState(false);
+
   const [detailsModal,       setDetailsModal]       = useState(null);
   const [detailsTab,         setDetailsTab]         = useState('notes');
   const [notesValue,         setNotesValue]         = useState('');
@@ -102,6 +105,12 @@ export default function Dashboard() {
   const [agentsLoading,   setAgentsLoading]   = useState(false);
   const [selectedAgentId, setSelectedAgentId] = useState('');
   const [reassigning,     setReassigning]     = useState(false);
+
+  // Comments tab
+  const [reportComments,    setReportComments]    = useState([]);
+  const [commentsLoading,   setCommentsLoading]   = useState(false);
+  const [commentText,       setCommentText]       = useState('');
+  const [sendingComment,    setSendingComment]    = useState(false);
 
   // Reject with reason modal
   const [rejectModal,  setRejectModal]  = useState(null);
@@ -286,10 +295,45 @@ export default function Dashboard() {
 
   const handleAgentKey = (e) => { if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendAgentMessage(); } };
 
+  const saveResolutionPhoto = async () => {
+    if (!resolutionPhoto.trim() || !detailsModal) return;
+    setSavingResPhoto(true);
+    try {
+      const res = await api.put(`/reports/${detailsModal.id}/resolution-photo`, { photoBase64: resolutionPhoto });
+      setReports(prev => prev.map(r => r.id === detailsModal.id ? { ...r, resolutionPhotoUrl: res.data.resolutionPhotoUrl } : r));
+      setDetailsModal(prev => ({ ...prev, resolutionPhotoUrl: res.data.resolutionPhotoUrl }));
+      toast('Photo de résolution ajoutée', 'success');
+    } catch { toast('Erreur lors de l\'ajout de la photo', 'error'); }
+    finally { setSavingResPhoto(false); }
+  };
+
+  const handleResPhotoFile = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => setResolutionPhoto(ev.target.result);
+    reader.readAsDataURL(file);
+  };
+
   const openDetails = (report) => {
     setDetailsModal(report); setDetailsTab('notes'); setNotesValue(report.agentNotes||'');
     setStatusHistory([]); setPriorities([]); setSelectedPriorityId(report.priorityId||'');
-    setAgents([]); setSelectedAgentId('');
+    setAgents([]); setSelectedAgentId(''); setResolutionPhoto('');
+    setReportComments([]); setCommentText('');
+  };
+
+  const sendReportComment = async () => {
+    if (!commentText.trim() || !detailsModal) return;
+    setSendingComment(true);
+    try {
+      const res = await api.post(`/reports/${detailsModal.id}/comments`, { content: commentText.trim() });
+      setReportComments(prev => [...prev, res.data]);
+      setCommentText('');
+      // Met à jour le compteur de commentaires dans la liste
+      setReports(prev => prev.map(r => r.id === detailsModal.id ? { ...r, commentCount: (r.commentCount || 0) + 1 } : r));
+    } catch (err) {
+      toast(err.response?.data?.message || 'Erreur lors de l\'envoi', 'error');
+    } finally { setSendingComment(false); }
   };
 
   const handleTabChange = async (tab) => {
@@ -311,6 +355,12 @@ export default function Dashboard() {
       try { const r = await api.get('/users/agents'); setAgents(r.data); }
       catch { setAgents([]); }
       finally { setAgentsLoading(false); }
+    }
+    if (tab === 'comments') {
+      setCommentsLoading(true);
+      try { const r = await api.get(`/reports/${detailsModal.id}/comments`); setReportComments(r.data); }
+      catch { setReportComments([]); }
+      finally { setCommentsLoading(false); }
     }
   };
 
@@ -776,11 +826,13 @@ export default function Dashboard() {
 
             <div className="tabs">
               {[
-                ['notes',    'Notes'],
-                ['photo',    detailsModal.photoUrl ? '📷 Photo' : 'Photo'],
-                ['history',  'Historique'],
-                ['priority', 'Priorité'],
-                ['reassign', 'Réassigner'],
+                ['notes',      'Notes'],
+                ['comments',   detailsModal.commentCount > 0 ? `💬 ${detailsModal.commentCount}` : '💬 Commentaires'],
+                ['photo',      detailsModal.photoUrl ? '📷 Photo' : 'Photo'],
+                ['history',    'Historique'],
+                ['priority',   'Priorité'],
+                ['reassign',   'Réassigner'],
+                ['resolution', detailsModal.resolutionPhotoUrl ? '✅ Résolution' : '📸 Résolution'],
               ].map(([tab, label]) => (
                 <button key={tab} className={`tab-btn${detailsTab===tab?' active':''}`} onClick={() => handleTabChange(tab)}>
                   {label}
@@ -799,6 +851,50 @@ export default function Dashboard() {
                   <button onClick={saveNotes} className="btn btn-primary" disabled={savingNotes}>
                     {savingNotes ? 'Sauvegarde…' : '💾 Sauvegarder'}
                   </button>
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Commentaires */}
+            {detailsTab === 'comments' && (
+              <div style={{ display:'flex', flexDirection:'column', gap:'0.75rem' }}>
+                <div style={{ maxHeight:280, overflowY:'auto', display:'flex', flexDirection:'column', gap:'0.5rem', minHeight:60 }}>
+                  {commentsLoading ? (
+                    <p style={{ color:'var(--text-muted)', fontSize:'0.85rem', textAlign:'center', padding:'1.5rem' }}>Chargement…</p>
+                  ) : reportComments.length === 0 ? (
+                    <p style={{ color:'var(--text-muted)', fontSize:'0.85rem', textAlign:'center', padding:'1.5rem' }}>Aucun commentaire sur ce signalement.</p>
+                  ) : reportComments.map(c => (
+                    <div key={c.id} style={{
+                      background: c.authorRole === 'CITIZEN' ? 'var(--glass)' : 'var(--terra-dim)',
+                      borderRadius:'var(--r-md)', padding:'0.6rem 0.85rem',
+                      borderLeft:`3px solid ${c.authorRole === 'CITIZEN' ? 'var(--blue)' : 'var(--terra)'}`,
+                    }}>
+                      <div style={{ display:'flex', justifyContent:'space-between', marginBottom:'0.2rem' }}>
+                        <span style={{ fontSize:'0.75rem', fontWeight:700, color: c.authorRole === 'CITIZEN' ? 'var(--blue)' : 'var(--terra)' }}>
+                          {c.authorRole === 'CITIZEN' ? '👤' : '🛠'} {c.authorName}
+                        </span>
+                        <span style={{ fontSize:'0.68rem', color:'var(--text-faint)' }}>
+                          {c.createdAt ? new Date(c.createdAt).toLocaleString('fr-FR', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' }) : ''}
+                        </span>
+                      </div>
+                      <p style={{ fontSize:'0.83rem', color:'var(--text-body)', margin:0 }}>{c.content}</p>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display:'flex', gap:'0.5rem', borderTop:'1px solid var(--border-subtle)', paddingTop:'0.75rem' }}>
+                  <input
+                    type="text" value={commentText}
+                    onChange={e => setCommentText(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && sendReportComment()}
+                    placeholder="Répondre au citoyen…"
+                    className="form-input" style={{ flex:1 }}
+                  />
+                  <button onClick={sendReportComment} disabled={sendingComment || !commentText.trim()} className="btn btn-primary">
+                    {sendingComment ? '…' : 'Envoyer'}
+                  </button>
+                </div>
+                <div style={{ display:'flex', justifyContent:'flex-end' }}>
+                  <button onClick={() => setDetailsModal(null)} className="btn btn-ghost">Fermer</button>
                 </div>
               </div>
             )}
@@ -922,6 +1018,61 @@ export default function Dashboard() {
                   <button onClick={() => setDetailsModal(null)} className="btn btn-ghost">Fermer</button>
                   <button onClick={saveReassignment} className="btn btn-primary" disabled={reassigning || !selectedAgentId}>
                     {reassigning ? 'Réassignation…' : '🔄 Réassigner'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Photo de résolution */}
+            {detailsTab === 'resolution' && (
+              <div style={{ display:'flex', flexDirection:'column', gap:'0.875rem' }}>
+                <p style={{ fontSize:'0.82rem', color:'var(--text-muted)' }}>
+                  Ajoutez une photo de preuve après résolution — visible par le citoyen et les superviseurs.
+                </p>
+
+                {/* Existing resolution photo */}
+                {detailsModal.resolutionPhotoUrl && (
+                  <div>
+                    <p style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--green)', marginBottom:'0.5rem' }}>✅ Photo de résolution existante</p>
+                    <img
+                      src={detailsModal.resolutionPhotoUrl}
+                      alt="Photo de résolution"
+                      style={{ width:'100%', maxHeight:300, objectFit:'cover', borderRadius:'var(--r-md)', border:'1px solid var(--green)' }}
+                    />
+                  </div>
+                )}
+
+                {/* Upload new photo */}
+                <div className="form-group">
+                  <label className="form-label">{detailsModal.resolutionPhotoUrl ? 'Remplacer la photo' : 'Ajouter une photo'}</label>
+                  <input
+                    type="file" accept="image/*"
+                    onChange={handleResPhotoFile}
+                    className="form-input"
+                    style={{ padding:'0.4rem 0.6rem', cursor:'pointer' }}
+                  />
+                </div>
+
+                {/* Preview */}
+                {resolutionPhoto && (
+                  <div>
+                    <p style={{ fontSize:'0.75rem', fontWeight:700, color:'var(--text-muted)', marginBottom:'0.4rem' }}>Aperçu</p>
+                    <img
+                      src={resolutionPhoto}
+                      alt="Aperçu"
+                      style={{ width:'100%', maxHeight:260, objectFit:'cover', borderRadius:'var(--r-md)', border:'1px solid var(--border-vis)' }}
+                    />
+                  </div>
+                )}
+
+                <div style={{ display:'flex', justifyContent:'flex-end', gap:'0.5rem' }}>
+                  <button onClick={() => setDetailsModal(null)} className="btn btn-ghost">Fermer</button>
+                  <button
+                    onClick={saveResolutionPhoto}
+                    className="btn btn-success"
+                    disabled={savingResPhoto || !resolutionPhoto}
+                  >
+                    {savingResPhoto ? 'Enregistrement…' : '📸 Enregistrer la photo'}
                   </button>
                 </div>
               </div>

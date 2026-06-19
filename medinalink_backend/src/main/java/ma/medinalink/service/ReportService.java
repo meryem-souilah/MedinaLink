@@ -12,13 +12,19 @@ import ma.medinalink.entity.PublicPriority;
 import ma.medinalink.entity.Report;
 import ma.medinalink.entity.ReportStatusHistory;
 import ma.medinalink.entity.User;
+import ma.medinalink.entity.Notification;
+import ma.medinalink.entity.ReportComment;
 import ma.medinalink.repository.AiInteractionRepository;
+import ma.medinalink.repository.NotificationRepository;
 import ma.medinalink.repository.PriorityRepository;
+import ma.medinalink.repository.ReportCommentRepository;
 import ma.medinalink.repository.ReportRepository;
 import ma.medinalink.repository.ReportStatusHistoryRepository;
+import ma.medinalink.repository.ReportVoteRepository;
 import ma.medinalink.repository.UserRepository;
 import ma.medinalink.resource.NotificationEndpoint;
 
+import jakarta.transaction.Transactional;
 import java.text.Normalizer;
 import java.util.HashMap;
 import java.util.List;
@@ -67,6 +73,7 @@ public class ReportService {
         CITY_BOUNDS.put("ifrane",      new double[]{33.48, 33.58, -5.18, -5.05});
         CITY_BOUNDS.put("azrou",       new double[]{33.42, 33.52, -5.30, -5.18});
         CITY_BOUNDS.put("tinghir",     new double[]{31.48, 31.60, -5.60, -5.48});
+        CITY_BOUNDS.put("taourirt",    new double[]{34.36, 34.46, -2.95, -2.82});
     }
 
     // Normalise un nom de ville : retire accents, minuscules, trim
@@ -103,6 +110,15 @@ public class ReportService {
 
     @Inject
     private PriorityRepository priorityRepository;
+
+    @Inject
+    private ReportCommentRepository commentRepository;
+
+    @Inject
+    private NotificationRepository notificationRepository;
+
+    @Inject
+    private ReportVoteRepository voteRepository;
 
     public ReportResponse create(ReportRequest request, UUID userId) {
 
@@ -151,6 +167,9 @@ public class ReportService {
             report.setPhotoUrl(request.getPhotoBase64());
         }
 
+        String detectedCity = detectCity(request.getLatitude(), request.getLongitude());
+        report.setDetectedCity(detectedCity);
+
         Report saved = reportRepository.save(report);
         assignNearestAgent(saved);
         return toResponse(saved);
@@ -176,28 +195,30 @@ public class ReportService {
             String city     = detectCity(report.getLatitude(), report.getLongitude());
             String category = report.getCategory();
 
-            // Priorité 1 : même ville + même catégorie
-            List<User> cityAgents = city != null
-                ? allAgents.stream().filter(a -> normalize(a.getSecteur()).equals(city)).collect(Collectors.toList())
-                : List.of();
-
-            List<User> candidates;
-            if (!cityAgents.isEmpty()) {
-                List<User> specialized = cityAgents.stream()
-                    .filter(a -> agentHandlesCategory(a, category))
-                    .collect(Collectors.toList());
-                // Priorité 2 : même ville, catégorie non restreinte
-                candidates = specialized.isEmpty() ? cityAgents : specialized;
-            } else {
-                // Priorité 3 : même catégorie toutes villes
-                List<User> catAgents = allAgents.stream()
-                    .filter(a -> agentHandlesCategory(a, category))
-                    .collect(Collectors.toList());
-                // Priorité 4 : n'importe quel agent
-                candidates = catAgents.isEmpty() ? allAgents : catAgents;
+            // Ville non reconnue → pas d'assignation (évite les faux positifs inter-villes)
+            if (city == null) {
+                System.out.println("[ReportService] Ville non détectée pour le signalement " + report.getId() + " — non assigné");
+                return;
             }
 
-            // Parmi les candidats, prendre le premier (ou le plus proche GPS)
+            // Agents couvrant exactement cette ville
+            List<User> cityAgents = allAgents.stream()
+                .filter(a -> city.equals(normalize(a.getSecteur())))
+                .collect(Collectors.toList());
+
+            // Aucun agent dans cette ville → pas d'assignation
+            if (cityAgents.isEmpty()) {
+                System.out.println("[ReportService] Aucun agent pour la ville " + city + " — non assigné");
+                return;
+            }
+
+            // Parmi les agents de la ville, préférer ceux qui couvrent la catégorie
+            List<User> specialized = cityAgents.stream()
+                .filter(a -> agentHandlesCategory(a, category))
+                .collect(Collectors.toList());
+            List<User> candidates = specialized.isEmpty() ? cityAgents : specialized;
+
+            // Choisir le plus proche GPS (ou le premier si pas de coords)
             User chosen = candidates.get(0);
             double minDist = Double.MAX_VALUE;
             for (User agent : candidates) {
@@ -236,9 +257,13 @@ public class ReportService {
     }
 
     public List<ReportResponse> findAll(int page, int size, String status, String category, UUID agentId) {
+        return findAll(page, size, status, category, agentId, null);
+    }
+
+    public List<ReportResponse> findAll(int page, int size, String status, String category, UUID agentId, String city) {
         List<Report> reports = agentId != null
             ? reportRepository.findByAgentId(agentId, page, size, status, category)
-            : reportRepository.findAll(page, size, status, category);
+            : reportRepository.findAll(page, size, status, category, city);
         return reports.stream().map(this::toResponse).collect(Collectors.toList());
     }
 
@@ -284,15 +309,18 @@ public class ReportService {
             historyRepository.save(history);
         } catch (Exception ignored) {}
 
-        // Notify citizen via WebSocket
-        String userId = updated.getUser().getId().toString();
-        String msg = switch (newStatus) {
-            case "IN_PROGRESS" -> "Votre signalement \"" + updated.getTitle() + "\" est en cours de traitement.";
-            case "RESOLVED"    -> "Votre signalement \"" + updated.getTitle() + "\" a été résolu !";
-            case "REJECTED"    -> "Votre signalement \"" + updated.getTitle() + "\" a été rejeté.";
-            default            -> "Statut de votre signalement mis à jour.";
-        };
-        NotificationEndpoint.notifyUser(userId, msg);
+        // Notification citoyen (WebSocket + persistante en DB)
+        if (updated.getUser() != null) {
+            UUID citizenId = updated.getUser().getId();
+            String msg = switch (newStatus) {
+                case "IN_PROGRESS" -> "Votre signalement \"" + updated.getTitle() + "\" est en cours de traitement.";
+                case "RESOLVED"    -> "Votre signalement \"" + updated.getTitle() + "\" a été résolu !";
+                case "REJECTED"    -> "Votre signalement \"" + updated.getTitle() + "\" a été rejeté.";
+                default            -> "Statut de votre signalement mis à jour.";
+            };
+            saveNotification(citizenId, updated.getId(), updated.getTitle(), msg, "STATUS_CHANGE");
+            NotificationEndpoint.notifyUser(citizenId.toString(), msg);
+        }
 
         return toResponse(updated);
     }
@@ -331,12 +359,91 @@ public class ReportService {
         return toResponse(updated);
     }
 
-    public ReportResponse upvote(UUID id) {
-        Report updated = reportRepository.upvote(id);
-        if (updated == null) {
-            throw new NotFoundException("Signalement non trouvé");
+    public ReportResponse upvote(UUID id, UUID userId) {
+        if (voteRepository.hasVoted(userId, id)) {
+            throw new BadRequestException("Vous avez déjà voté pour ce signalement");
         }
+        voteRepository.save(userId, id);
+        Report updated = reportRepository.upvoteIncrement(id);
+        if (updated == null) throw new NotFoundException("Signalement non trouvé");
         return toResponse(updated);
+    }
+
+    public List<UUID> getMyVotes(UUID userId) {
+        return voteRepository.findReportIdsByUser(userId);
+    }
+
+    public List<java.util.Map<String, Object>> getComments(UUID reportId) {
+        return commentRepository.findByReportId(reportId).stream().map(c -> {
+            java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("id",          c.getId());
+            m.put("authorName",  c.getAuthorName());
+            m.put("authorRole",  c.getAuthorRole());
+            m.put("content",     c.getContent());
+            m.put("createdAt",   c.getCreatedAt());
+            return m;
+        }).collect(Collectors.toList());
+    }
+
+    @Transactional
+    public java.util.Map<String, Object> addComment(UUID reportId, UUID userId, String content) {
+        if (content == null || content.isBlank()) throw new BadRequestException("Le commentaire ne peut pas être vide");
+        Report report = reportRepository.findById(reportId)
+            .orElseThrow(() -> new NotFoundException("Signalement non trouvé"));
+        User author = userRepository.findById(userId)
+            .orElseThrow(() -> new NotFoundException("Utilisateur non trouvé"));
+
+        ReportComment comment = new ReportComment();
+        comment.setReportId(reportId);
+        comment.setUserId(userId);
+        comment.setAuthorName(author.getFullName());
+        comment.setAuthorRole(author.getRole().name());
+        comment.setContent(content.trim());
+        commentRepository.save(comment);
+
+        // Notification : si commentaire d'un agent → notifier le citoyen, sinon notifier l'agent assigné
+        try {
+            UUID notifyTarget = null;
+            if (author.getRole().name().equals("CITIZEN") && report.getAssignedAgentId() != null) {
+                notifyTarget = report.getAssignedAgentId();
+            } else if (!author.getRole().name().equals("CITIZEN") && report.getUser() != null) {
+                notifyTarget = report.getUser().getId();
+            }
+            if (notifyTarget != null) {
+                String msg = author.getFullName() + " a commenté : \"" + report.getTitle() + "\"";
+                saveNotification(notifyTarget, reportId, report.getTitle(), msg, "COMMENT");
+                NotificationEndpoint.notifyUser(notifyTarget.toString(), msg);
+            }
+        } catch (Exception ignored) {}
+
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("id",         comment.getId());
+        result.put("authorName", comment.getAuthorName());
+        result.put("authorRole", comment.getAuthorRole());
+        result.put("content",    comment.getContent());
+        result.put("createdAt",  comment.getCreatedAt());
+        return result;
+    }
+
+    public ReportResponse updateResolutionPhoto(UUID id, String photoBase64) {
+        Report report = reportRepository.findById(id)
+            .orElseThrow(() -> new NotFoundException("Signalement non trouvé"));
+        report.setResolutionPhotoUrl(photoBase64);
+        return toResponse(reportRepository.update(report));
+    }
+
+    private void saveNotification(UUID userId, UUID reportId, String reportTitle, String message, String type) {
+        try {
+            Notification n = new Notification();
+            n.setUserId(userId);
+            n.setReportId(reportId);
+            n.setReportTitle(reportTitle);
+            n.setMessage(message);
+            n.setType(type);
+            notificationRepository.save(n);
+        } catch (Exception e) {
+            System.err.println("[Notification] Erreur sauvegarde : " + e.getMessage());
+        }
     }
 
     public int assignPendingReportsToAgent(User agent) {
@@ -345,30 +452,26 @@ public class ReportService {
         String cityKey = normalize(agent.getSecteur());
         double[] bounds = CITY_BOUNDS.get(cityKey);
 
+        // Ville non reconnue dans notre carte → on n'assigne rien pour éviter des faux positifs
+        if (bounds == null) {
+            System.out.println("[ReportService] Ville « " + agent.getSecteur() + " » non trouvée dans la carte — aucune réassignation");
+            return 0;
+        }
+
         String cats = agent.getAgentCategories();
         String[] categories = (cats != null && !cats.isBlank()) ? cats.split(",") : null;
 
         List<Report> pending = new java.util.ArrayList<>();
 
-        if (bounds != null) {
-            if (categories != null) {
-                // Ville connue + catégories spécifiques
-                for (String cat : categories) {
-                    pending.addAll(reportRepository.findPendingInBoundsAndCategory(
-                        bounds[0], bounds[1], bounds[2], bounds[3], cat.trim()));
-                }
-            } else {
-                // Ville connue, toutes catégories
-                pending = reportRepository.findPendingInBounds(bounds[0], bounds[1], bounds[2], bounds[3]);
-            }
-        } else if (categories != null) {
-            // Ville inconnue mais catégories spécifiques
+        if (categories != null) {
+            // Ville connue + catégories spécifiques
             for (String cat : categories) {
-                pending.addAll(reportRepository.findPendingByCategory(cat.trim()));
+                pending.addAll(reportRepository.findPendingInBoundsAndCategory(
+                    bounds[0], bounds[1], bounds[2], bounds[3], cat.trim()));
             }
         } else {
-            // Fallback texte
-            pending = reportRepository.findPendingBySectorText(agent.getSecteur());
+            // Ville connue, toutes catégories
+            pending = reportRepository.findPendingInBounds(bounds[0], bounds[1], bounds[2], bounds[3]);
         }
 
         for (Report report : pending) {
@@ -380,6 +483,18 @@ public class ReportService {
         System.out.println("[ReportService] " + pending.size() + " signalement(s) PENDING assigné(s) à "
             + agent.getFullName() + " (secteur=" + agent.getSecteur() + ", catégories=" + cats + ")");
         return pending.size();
+    }
+
+    public ReportResponse unassign(UUID reportId) {
+        Report report = reportRepository.findById(reportId)
+            .orElseThrow(() -> new NotFoundException("Signalement non trouvé"));
+        report.setAssignedAgentId(null);
+        report.setAssignedAgentName(null);
+        report.setSecteur(null);
+        if ("IN_PROGRESS".equals(report.getStatus())) {
+            report.setStatus("PENDING");
+        }
+        return toResponse(reportRepository.update(report));
     }
 
     public ReportResponse assignToAgent(UUID reportId, UUID agentId) {
@@ -403,7 +518,7 @@ public class ReportService {
                 .orElse(null);
         }
 
-        return new ReportResponse(
+        ReportResponse resp = new ReportResponse(
             report.getId(),
             report.getTitle(),
             report.getDescription(),
@@ -423,5 +538,9 @@ public class ReportService {
             report.getAssignedAgentName(),
             report.getSecteur()
         );
+        resp.setDetectedCity(report.getDetectedCity());
+        resp.setResolutionPhotoUrl(report.getResolutionPhotoUrl());
+        try { resp.setCommentCount((int) commentRepository.countByReportId(report.getId())); } catch (Exception ignored) {}
+        return resp;
     }
 }

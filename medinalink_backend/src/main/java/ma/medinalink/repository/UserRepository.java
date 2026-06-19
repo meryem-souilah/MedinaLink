@@ -102,6 +102,15 @@ public void updateRole(UUID id, ma.medinalink.entity.Role newRole) {
     }
 
     @Transactional
+    public void updateZone(UUID id, String secteur, String categories) {
+        User user = em.find(User.class, id);
+        if (user == null) return;
+        user.setSecteur(secteur);
+        user.setAgentCategories(categories);
+        em.merge(user);
+    }
+
+    @Transactional
     public void updatePassword(UUID id, String newPasswordHash) {
         User user = em.find(User.class, id);
         if (user != null) {
@@ -128,6 +137,15 @@ public void updateRole(UUID id, ma.medinalink.entity.Role newRole) {
     // -------------------------------------------------------
     // Vérifier si un email est déjà utilisé
     // -------------------------------------------------------
+    @Transactional
+    public void updateCity(UUID id, String city) {
+        User user = em.find(User.class, id);
+        if (user != null) {
+            user.setCity(city);
+            em.merge(user);
+        }
+    }
+
     public boolean existsByEmail(String email) {
         Long count = em.createQuery(
                 "SELECT COUNT(u) FROM User u WHERE u.email = :email",

@@ -50,6 +50,9 @@ public class User {
     @Column(name = "agent_categories", length = 500)
     private String agentCategories;
 
+    @Column(name = "city", length = 100)
+    private String city;
+
     // Constructeur vide (requis par JPA)
     public User() {}
 
@@ -75,6 +78,7 @@ public class User {
     public LocalDateTime getCreatedAt() { return createdAt; }
     public boolean isActive() { return isActive; }
     public String getAgentCategories() { return agentCategories; }
+    public String getCity() { return city; }
 
     // Setters
     public void setId(UUID id) { this.id = id; }
@@ -89,4 +93,5 @@ public class User {
     public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
     public void setActive(boolean active) { isActive = active; }
     public void setAgentCategories(String agentCategories) { this.agentCategories = agentCategories; }
+    public void setCity(String city) { this.city = city; }
 }

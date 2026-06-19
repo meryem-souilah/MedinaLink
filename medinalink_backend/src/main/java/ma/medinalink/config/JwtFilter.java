@@ -78,6 +78,11 @@ public class JwtFilter implements ContainerRequestFilter {
 
         String role = jwtService.getRoleFromToken(token);
 
+        // Citoyen peut mettre à jour sa propre ville
+        if (method.equals("PUT") && path.endsWith("users/my/city")) {
+            return;
+        }
+
         // ADMIN uniquement : gestion des utilisateurs
         if (path.contains("/users")) {
             if (!"ADMIN".equals(role)) {
