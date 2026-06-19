@@ -7,8 +7,17 @@ import { useToast } from '../hooks/useToast';
 
 const ROLE_META = {
   CITIZEN: { label: 'Citoyen',        cls: 'badge-resolved', icon: '👤', tip: 'Signalez des problèmes dans votre quartier et suivez leur résolution en temps réel.' },
-  AGENT:   { label: 'Agent Municipal', cls: 'badge-progress', icon: '🛠', tip: 'Vous gérez les signalements assignés à votre zone. Contactez votre administrateur pour modifier votre secteur.' },
+  AGENT:   { label: 'Agent Municipal', cls: 'badge-progress', icon: '🛠', tip: 'Vous gérez les signalements assignés à votre secteur. Contactez votre administrateur pour modifier votre zone.' },
   ADMIN:   { label: 'Administrateur',  cls: 'badge-rejected', icon: '⚙️', tip: 'Vous avez accès complet à la gestion des utilisateurs et des signalements.' },
+};
+
+const CAT_LABELS = {
+  ROAD: '🚧 Routes / Nids de poule',
+  LIGHTING: '💡 Éclairage public',
+  WATER: '💧 Fuites d\'eau',
+  WASTE: '🗑️ Déchets',
+  GREENSPACE: '🌳 Espaces verts',
+  OTHER: '📌 Autre',
 };
 
 export default function Profile() {
@@ -113,6 +122,40 @@ export default function Profile() {
               💡 {role.tip}
             </p>
           </div>
+
+          {/* Secteur & catégories — agents uniquement */}
+          {user?.role === 'AGENT' && (
+            <div style={{ background: 'var(--surface)', border: '1px solid var(--border-vis)', borderRadius: 'var(--r-lg)', padding: '1.25rem', marginBottom: '1.25rem' }}>
+              <p style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--text-warm)', marginBottom: '0.75rem' }}>
+                🗺️ Mon secteur d'intervention
+              </p>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'var(--terra-dim)', border: '1px solid var(--terra-border)', borderRadius: 'var(--r-md)', padding: '0.75rem 1rem' }}>
+                  <span style={{ fontSize: '1.2rem' }}>📍</span>
+                  <div>
+                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '0.1rem' }}>Ville / Secteur</p>
+                    <p style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--terra)' }}>
+                      {user?.secteur ? user.secteur.charAt(0).toUpperCase() + user.secteur.slice(1) : '—'}
+                    </p>
+                  </div>
+                </div>
+                <div style={{ background: 'var(--surface)', border: '1px solid var(--border-subtle)', borderRadius: 'var(--r-md)', padding: '0.75rem 1rem' }}>
+                  <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.07em', marginBottom: '0.5rem' }}>Types de signalements gérés</p>
+                  {user?.agentCategories ? (
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                      {user.agentCategories.split(',').map(cat => cat.trim()).filter(Boolean).map(cat => (
+                        <span key={cat} style={{ background: 'var(--blue-dim)', border: '1px solid var(--blue-border)', borderRadius: '20px', padding: '0.2rem 0.7rem', fontSize: '0.8rem', color: 'var(--blue)', fontWeight: 500 }}>
+                          {CAT_LABELS[cat] || cat}
+                        </span>
+                      ))}
+                    </div>
+                  ) : (
+                    <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Tous les types de signalements</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Ville — citoyens uniquement */}
           {user?.role === 'CITIZEN' && (

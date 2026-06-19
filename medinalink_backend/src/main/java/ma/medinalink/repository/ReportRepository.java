@@ -134,16 +134,25 @@ public class ReportRepository {
     }
 
     // -------------------------------------------------------
-    // Signalements assignés à un agent (avec filtres)
+    // Signalements assignés à un agent OU non-assignés dans sa ville
     // -------------------------------------------------------
     public List<Report> findByAgentId(UUID agentId, int page, int size, String status, String category) {
-        StringBuilder jpql = new StringBuilder("SELECT r FROM Report r WHERE r.assignedAgentId = :agentId");
-        if (status != null && !status.isBlank())   jpql.append(" AND r.status = :status");
+        return findByAgentId(agentId, null, page, size, status, category);
+    }
+
+    public List<Report> findByAgentId(UUID agentId, String city, int page, int size, String status, String category) {
+        StringBuilder jpql = new StringBuilder(
+            "SELECT r FROM Report r WHERE (r.assignedAgentId = :agentId");
+        if (city != null && !city.isBlank())
+            jpql.append(" OR (r.detectedCity = :city AND r.assignedAgentId IS NULL)");
+        jpql.append(")");
+        if (status != null && !status.isBlank())     jpql.append(" AND r.status = :status");
         if (category != null && !category.isBlank()) jpql.append(" AND r.category = :category");
         jpql.append(" ORDER BY r.createdAt DESC");
 
         var query = em.createQuery(jpql.toString(), Report.class).setParameter("agentId", agentId);
-        if (status != null && !status.isBlank())   query.setParameter("status", status);
+        if (city != null && !city.isBlank())         query.setParameter("city", city);
+        if (status != null && !status.isBlank())     query.setParameter("status", status);
         if (category != null && !category.isBlank()) query.setParameter("category", category);
         return query.setFirstResult(page * size).setMaxResults(size).getResultList();
     }

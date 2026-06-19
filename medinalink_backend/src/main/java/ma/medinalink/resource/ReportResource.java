@@ -55,19 +55,24 @@ public class ReportResource {
             @Context HttpHeaders headers) {
         try {
             UUID agentId = (agentIdStr != null && !agentIdStr.isBlank()) ? UUID.fromString(agentIdStr) : null;
-            // Filtre ville automatique pour les citoyens
             String city = null;
+            String agentSecteur = null;
             try {
                 String auth = headers.getHeaderString(HttpHeaders.AUTHORIZATION);
                 if (auth != null && auth.startsWith("Bearer ")) {
                     UUID callerId = jwtService.getUserIdFromToken(auth.substring(7));
                     User caller = userRepository.findById(callerId).orElse(null);
-                    if (caller != null && caller.getRole() == Role.CITIZEN && caller.getCity() != null && !caller.getCity().isBlank()) {
-                        city = caller.getCity().toLowerCase().trim();
+                    if (caller != null) {
+                        if (caller.getRole() == Role.CITIZEN && caller.getCity() != null && !caller.getCity().isBlank()) {
+                            city = caller.getCity().toLowerCase().trim();
+                        }
+                        if (caller.getRole() == Role.AGENT && caller.getSecteur() != null && !caller.getSecteur().isBlank()) {
+                            agentSecteur = caller.getSecteur().toLowerCase().trim();
+                        }
                     }
                 }
             } catch (Exception ignored) {}
-            var reports = reportService.findAll(page, size, status, category, agentId, city);
+            var reports = reportService.findAll(page, size, status, category, agentId, city, agentSecteur);
             return Response.ok(reports).build();
         } catch (Exception e) {
             return Response.status(500).entity(Map.of("message", e.getMessage())).build();

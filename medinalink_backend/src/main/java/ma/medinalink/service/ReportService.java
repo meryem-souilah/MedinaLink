@@ -93,6 +93,16 @@ public class ReportService {
         return null;
     }
 
+    // Détecte la ville depuis le texte d'adresse (fallback quand GPS absent/hors bbox)
+    private String detectCityFromAddress(String address) {
+        if (address == null || address.isBlank()) return null;
+        String norm = normalize(address);
+        for (String city : CITY_BOUNDS.keySet()) {
+            if (norm.contains(city)) return city;
+        }
+        return null;
+    }
+
     @Inject
     private ReportRepository reportRepository;
 
@@ -125,8 +135,9 @@ public class ReportService {
         if (request.getTitle() == null || request.getTitle().isBlank()) {
             throw new BadRequestException("Le titre est obligatoire");
         }
-        if (request.getLongitude() == null || request.getLatitude() == null) {
-            throw new BadRequestException("Les coordonnées GPS sont obligatoires");
+        if ((request.getLongitude() == null || request.getLatitude() == null)
+                && (request.getAddress() == null || request.getAddress().isBlank())) {
+            throw new BadRequestException("Veuillez saisir une adresse ou utiliser la géolocalisation");
         }
 
         User user = userRepository.findById(userId)
@@ -167,7 +178,16 @@ public class ReportService {
             report.setPhotoUrl(request.getPhotoBase64());
         }
 
-        String detectedCity = detectCity(request.getLatitude(), request.getLongitude());
+        String detectedCity = null;
+        if (request.getLatitude() != null && request.getLongitude() != null) {
+            detectedCity = detectCity(request.getLatitude(), request.getLongitude());
+        }
+        if (detectedCity == null) {
+            detectedCity = detectCityFromAddress(request.getAddress());
+        }
+        if (detectedCity == null && user.getCity() != null) {
+            detectedCity = normalize(user.getCity());
+        }
         report.setDetectedCity(detectedCity);
 
         Report saved = reportRepository.save(report);
@@ -192,10 +212,17 @@ public class ReportService {
             List<User> allAgents = userRepository.findAllAgents();
             if (allAgents.isEmpty()) return;
 
-            String city     = detectCity(report.getLatitude(), report.getLongitude());
+            // Priorité 1 : GPS bounding box
+            String detectedCity = (report.getLatitude() != null && report.getLongitude() != null)
+                ? detectCity(report.getLatitude(), report.getLongitude()) : null;
+            // Priorité 2 : adresse texte
+            if (detectedCity == null) detectedCity = detectCityFromAddress(report.getAddress());
+            // Priorité 3 : ville du citoyen
+            if (detectedCity == null && report.getUser() != null) detectedCity = normalize(report.getUser().getCity());
+
+            final String city = detectedCity;
             String category = report.getCategory();
 
-            // Ville non reconnue → pas d'assignation (évite les faux positifs inter-villes)
             if (city == null) {
                 System.out.println("[ReportService] Ville non détectée pour le signalement " + report.getId() + " — non assigné");
                 return;
@@ -261,8 +288,12 @@ public class ReportService {
     }
 
     public List<ReportResponse> findAll(int page, int size, String status, String category, UUID agentId, String city) {
+        return findAll(page, size, status, category, agentId, city, null);
+    }
+
+    public List<ReportResponse> findAll(int page, int size, String status, String category, UUID agentId, String city, String agentSecteur) {
         List<Report> reports = agentId != null
-            ? reportRepository.findByAgentId(agentId, page, size, status, category)
+            ? reportRepository.findByAgentId(agentId, agentSecteur, page, size, status, category)
             : reportRepository.findAll(page, size, status, category, city);
         return reports.stream().map(this::toResponse).collect(Collectors.toList());
     }
