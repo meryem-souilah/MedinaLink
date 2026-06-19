@@ -141,10 +141,15 @@ public class ReportRepository {
     }
 
     public List<Report> findByAgentId(UUID agentId, String city, int page, int size, String status, String category) {
-        StringBuilder jpql = new StringBuilder(
-            "SELECT r FROM Report r WHERE (r.assignedAgentId = :agentId");
-        if (city != null && !city.isBlank())
+        StringBuilder jpql = new StringBuilder("SELECT r FROM Report r WHERE (");
+        if (city != null && !city.isBlank()) {
+            // Rapports assignés à cet agent ET dans sa ville (exclut les anciens assignements incorrects)
+            jpql.append("(r.assignedAgentId = :agentId AND r.detectedCity = :city)");
+            // Rapports PENDING non-assignés dans sa ville
             jpql.append(" OR (r.detectedCity = :city AND r.assignedAgentId IS NULL AND r.status = 'PENDING')");
+        } else {
+            jpql.append("r.assignedAgentId = :agentId");
+        }
         jpql.append(")");
         if (status != null && !status.isBlank())     jpql.append(" AND r.status = :status");
         if (category != null && !category.isBlank()) jpql.append(" AND r.category = :category");
