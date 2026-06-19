@@ -6,41 +6,9 @@ on:
 
 jobs:
 
-  # ── Deploy Backend → Railway ────────────────────────────────────
-  deploy-backend:
-    name: Deploy Backend (Railway)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      - name: Deploy Backend
-        working-directory: medinalink_backend
-        run: railway up --service MedinaLink --detach
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: 46a0ea26-6e17-4bf2-9d10-326eb96b3826
-
-  # ── Deploy AI Service → Railway ─────────────────────────────────
-  deploy-ai:
-    name: Deploy AI Service (Railway)
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      - name: Deploy AI Service
-        working-directory: medinalink-ai
-        run: railway up --service medinalink-ai --detach
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
-          RAILWAY_PROJECT_ID: 46a0ea26-6e17-4bf2-9d10-326eb96b3826
-
   # ── Deploy Frontend → Vercel ─────────────────────────────────────
+  # Backend & AI sont déployés automatiquement par Railway
+  # via son intégration GitHub native (aucun token requis ici)
   deploy-frontend:
     name: Deploy Frontend (Vercel)
     runs-on: ubuntu-latest
