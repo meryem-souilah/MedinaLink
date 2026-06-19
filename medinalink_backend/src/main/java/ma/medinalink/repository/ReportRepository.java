@@ -121,6 +121,15 @@ public class ReportRepository {
     }
 
     // -------------------------------------------------------
+    // Supprimer un signalement
+    // -------------------------------------------------------
+    @Transactional
+    public void delete(UUID id) {
+        Report report = em.find(Report.class, id);
+        if (report != null) em.remove(report);
+    }
+
+    // -------------------------------------------------------
     // Mettre à jour le statut
     // -------------------------------------------------------
     @Transactional

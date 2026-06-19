@@ -278,6 +278,27 @@ public class ReportResource {
     }
 
     // -------------------------------------------------------
+    // DELETE /api/v1/reports/{id}
+    // Seul le citoyen propriétaire peut supprimer son signalement PENDING
+    // -------------------------------------------------------
+    @DELETE
+    @Path("/{id}")
+    @Secured
+    public Response delete(@PathParam("id") UUID id, @Context HttpHeaders headers) {
+        try {
+            UUID userId = getUserIdFromHeader(headers);
+            reportService.delete(id, userId);
+            return Response.noContent().build();
+        } catch (BadRequestException e) {
+            return Response.status(400).entity(Map.of("message", e.getMessage())).build();
+        } catch (NotFoundException e) {
+            return Response.status(404).entity(Map.of("message", e.getMessage())).build();
+        } catch (Exception e) {
+            return Response.status(500).entity(Map.of("message", e.getMessage())).build();
+        }
+    }
+
+    // -------------------------------------------------------
     // PUT /api/v1/reports/{id}/assign
     // Body : { "agentId": "uuid" }
     // -------------------------------------------------------

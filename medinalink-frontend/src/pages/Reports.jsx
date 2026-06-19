@@ -44,6 +44,7 @@ export default function Reports() {
   const [statusFilter,   setStatusFilter]   = useState('ALL');
   const [notification,   setNotification]   = useState('');
   const [upvotingId,     setUpvotingId]     = useState(null);
+  const [deletingId,     setDeletingId]     = useState(null);
   const [votedIds,       setVotedIds]       = useState(new Set());
   const [commentModal,   setCommentModal]   = useState(null); // { report }
   const [comments,       setComments]       = useState([]);
@@ -105,6 +106,20 @@ export default function Reports() {
       if (err.response?.status === 409) setVotedIds(prev => new Set([...prev, id]));
     } finally {
       setUpvotingId(null);
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm('Supprimer ce signalement définitivement ?')) return;
+    setDeletingId(id);
+    try {
+      await api.delete(`/reports/${id}`);
+      setReports(prev => prev.filter(r => r.id !== id));
+      toast('Signalement supprimé', 'success');
+    } catch (err) {
+      toast(err.response?.data?.message || 'Erreur lors de la suppression', 'error');
+    } finally {
+      setDeletingId(null);
     }
   };
 
@@ -284,6 +299,17 @@ export default function Reports() {
                     >
                       💬 {report.commentCount > 0 ? report.commentCount : ''}
                     </button>
+                    {report.status === 'PENDING' && report.userId === user?.userId && (
+                      <button
+                        onClick={() => handleDelete(report.id)}
+                        disabled={deletingId === report.id}
+                        className="btn-upvote"
+                        style={{ marginLeft: '0.4rem', color: 'var(--red, #e53e3e)' }}
+                        title="Supprimer ce signalement"
+                      >
+                        {deletingId === report.id ? '…' : '🗑️'}
+                      </button>
+                    )}
                     <span style={{ fontSize:'0.72rem', color:'var(--text-faint)' }}>
                       {report.createdAt ? timeAgo(report.createdAt) : ''}
                     </span>

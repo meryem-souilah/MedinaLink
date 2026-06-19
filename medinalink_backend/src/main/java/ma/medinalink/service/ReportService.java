@@ -314,6 +314,19 @@ public class ReportService {
             .collect(Collectors.toList());
     }
 
+    @Transactional
+    public void delete(UUID id, UUID userId) {
+        Report report = reportRepository.findById(id)
+            .orElseThrow(() -> new NotFoundException("Signalement non trouvé"));
+        if (!report.getUser().getId().equals(userId)) {
+            throw new BadRequestException("Vous ne pouvez supprimer que vos propres signalements");
+        }
+        if (!"PENDING".equals(report.getStatus())) {
+            throw new BadRequestException("Seuls les signalements en attente peuvent être supprimés");
+        }
+        reportRepository.delete(id);
+    }
+
     public ReportResponse updateStatus(UUID id, String newStatus, UUID agentUserId) {
         List<String> validStatuses = List.of("PENDING", "IN_PROGRESS", "RESOLVED", "REJECTED");
         if (!validStatuses.contains(newStatus)) {
@@ -571,6 +584,7 @@ public class ReportService {
         );
         resp.setDetectedCity(report.getDetectedCity());
         resp.setResolutionPhotoUrl(report.getResolutionPhotoUrl());
+        if (report.getUser() != null) resp.setUserId(report.getUser().getId());
         try { resp.setCommentCount((int) commentRepository.countByReportId(report.getId())); } catch (Exception ignored) {}
         return resp;
     }

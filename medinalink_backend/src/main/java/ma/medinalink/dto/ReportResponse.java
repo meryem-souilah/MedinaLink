@@ -6,6 +6,7 @@ import java.util.UUID;
 public class ReportResponse {
 
     private UUID id;
+    private UUID userId;
     private String title;
     private String description;
     private Double longitude;
@@ -75,6 +76,8 @@ public class ReportResponse {
     public String getAssignedAgentName() { return assignedAgentName; }
     public String getSecteur() { return secteur; }
 
+    public UUID getUserId() { return userId; }
+    public void setUserId(UUID userId) { this.userId = userId; }
     public void setId(UUID id) { this.id = id; }
     public void setTitle(String title) { this.title = title; }
     public void setDescription(String description) { this.description = description; }
