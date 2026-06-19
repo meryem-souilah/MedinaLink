@@ -18,9 +18,10 @@ jobs:
 
       - name: Deploy Backend
         working-directory: medinalink_backend
-        run: railway up --service medinalink-backend --detach
+        run: railway up --service MedinaLink --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: 46a0ea26-6e17-4bf2-9d10-326eb96b3826
 
   # ── Deploy AI Service → Railway ─────────────────────────────────
   deploy-ai:
@@ -37,6 +38,7 @@ jobs:
         run: railway up --service medinalink-ai --detach
         env:
           RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+          RAILWAY_PROJECT_ID: 46a0ea26-6e17-4bf2-9d10-326eb96b3826
 
   # ── Deploy Frontend → Vercel ─────────────────────────────────────
   deploy-frontend:
